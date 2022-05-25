@@ -1,0 +1,111 @@
+<!DOCTYPE HTML>
+<html>
+  <meta charset="utf-8"/>
+  <head>
+    <title>Blocks</title>
+  </head>
+  <body>
+    <h id="title"></h>
+    <p id="data"></p>
+    <ol id="utterances"></ol>
+
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+    <script src="../node_modules/matter-js/build/matter.js"></script>
+    <script src="../node_modules/underscore/underscore.js"></script>
+
+    <link type="text/css" href="../01_custom_styles.css" rel="stylesheet" />
+
+    <script src="00_globals.js"></script>
+    <script src="01_config.js"></script>
+    <script src="02_utils.js"></script>
+    <script src="03_elements.js"></script>
+    <script src="04_test_stimuli.js"></script>
+    <script src="05_train_stimuli.js" type="text/javascript"></script>
+    <script src="06_scene.js"></script>
+
+    <!-- choose experimental/train stimulus -->
+    <script type="text/javascript">
+      let cond, stimulus, id;
+      if(MODE === "test") {
+        let types = TEST_TYPES;
+        types = ['if1_ind']
+        // types = ['if2']
+        //types = ['independent_edge3']
+        cond = types[_.random(0, types.length-1)];
+        let priors = ['u', 'h', 'l', 'n', 'u-L', 'u-H']
+        let p1 = _.sample(priors);
+        let p2 = _.sample(priors);
+        let p3 = cond == 'if2' ? _.sample(priors) : '';
+        // p1 = 'n'
+        // p2 = 'h'
+        // p3 = 'n'
+        id =  cond + '_' + p1 + p2 + p3;
+        //console.log(TestStimuli[cond])
+        stimulus = TestStimuli[cond][id];
+      } else if(MODE === "train") {
+        // let types = ["independent", "if1", "uncertain", "ramp", "if2ssw", "cp"]
+        // types = ["independent"]
+        // types = ["uncertain"]
+        // types = ["if1"]
+        // types = ["if2ssw"]
+        // types = ["ramp"]
+        // types = ['cp']
+        types = ['if1_ind']
+        cond = types[_.random(0, types.length-1)];
+        id = _.sample(_.keys(TrainStimuli.map_category[cond]));
+        // id = 'uncertain3';
+        //id = 'distance1'
+        // id = "ind2"
+        // id = "ssw1"
+        // id = "ac3"
+        stimulus = TrainStimuli.map_category[cond][id];
+      } else if (MODE == "color-vision"){
+        let ColorVisionStimuli = [];
+        let stimuli = makeColorVisionStimuli();
+        id = _.sample(_.range(0, stimuli.length));
+        stimulus = stimuli[id]
+      } else {
+        console.error('set MODE in 01_config.js to one of: color-vision, train, test.')
+      }
+      console.log(id + ': ' + stimulus.meta.join(" "))
+    </script>
+
+    <!-- add objects to world -->
+    <script type="text/javascript">
+      console.log(stimulus)
+      let worldElems = createWorld();
+      let render = worldElems.render
+      let engine = worldElems.engine;
+      let bottom = MODE==="color-vision" || stimulus.id==="uncertain_2" ? false : true;
+      stimulus.objs = stimulus.objs.concat(movingIrrelevantObj());
+      addObjs2World(stimulus.objs, engine, bottom);
+    </script>
+
+    <!-- wrapper classes -->
+    <script type="text/javascript">
+    wrapperClearWorld = function(){
+      clearWorld(engine, render);
+    }
+    wrapperRunAnimation = function(){
+      runAnimation(engine);
+    }
+    </script>
+
+    <!-- in debug mode: show data for shown stimulus -->
+    <button id="exitBttn" class="hide" onclick="wrapperClearWorld()">clear</button>
+    <button id="startBttn" class="hide" onclick="wrapperRunAnimation()">start</button>
+    <script type="text/javascript">
+      if(DEBUG){
+        $('#exitBttn').toggleClass('hide');
+        $('#startBttn').toggleClass('hide');
+
+        document.getElementById("title").innerHTML = 'stimulus id: ' + id;
+        var priors = id.includes("distance") ? [1,2] : [0,1];
+        document.getElementById("data").innerHTML =
+          'P(A): ' + stimulus.meta[priors[0]] + ' P(C): ' + stimulus.meta[priors[1]] +
+          ', mode: ' + MODE;
+      }
+    </script>
+    <script type="text/javascript">show(engine, render)</script>
+  </body>
+</html>

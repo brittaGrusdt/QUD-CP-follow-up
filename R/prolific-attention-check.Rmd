@@ -1,0 +1,60 @@
+---
+title: "attention-check-prolific"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+```
+
+Load experimental data
+
+```{r}
+target_dir = here("results")
+fn <- file.path(target_dir, "results_82_CommunicationBlocks2_BG.csv")
+data <- read.csv(fn, sep=",") %>% as_tibble() %>% group_by(prolific_id)
+```
+
+We don't pay participants who did not reply correctly in the attention check 
+trial.
+
+```{r}
+attention_checks = data %>% filter(type=="attention-check") %>% 
+  dplyr::select(submission_id, prolific_id, id, selected_pic, expected, 
+                comments, timeSpent, expected) %>% 
+  mutate(correct = case_when(expected == selected_pic ~ TRUE, T ~ FALSE)) 
+
+ids.attention_out = attention_checks %>% 
+  filter(!str_detect(selected_pic, expected)) %>% 
+  dplyr::select(prolific_id, comments, timeSpent, selected_pic, expected) %>%
+  distinct()
+
+# nb of participants who did not select the single correct scene in the 
+# attention check trial
+attention_checks %>% group_by(correct) %>% dplyr::count()
+ids.attention_out
+```
+
+check participants' comments
+
+```{r}
+data %>% select(comments, submission_id, prolific_id) %>% distinct() %>% 
+  filter(comments != "") %>% filter(str_detect(comments, "attention"))
+```
+
+Since some participants didn't recognize the attention-check trial and since
+there was only one real attention check trial, we further look at filler + practice
+trials that have one clearly correct answer for participants who failed in the 
+attention-check trial to see whether we really don't pay.
+
+```{r}
+data %>% 
+  filter(prolific_id %in% ids.attention_out$prolific_id) %>% 
+  filter(id %in% c("trial10", "trial25")) %>% 
+  dplyr::select(prolific_id, expected, selected_pic, id) %>% 
+  mutate(correct = case_when(expected == selected_pic ~ TRUE, T ~ FALSE)) %>%
+  summarize(N=n(), n_correct = sum(correct)) %>% 
+  filter(n_correct != N)
+```
