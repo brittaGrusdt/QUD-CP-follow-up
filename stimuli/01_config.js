@@ -182,7 +182,7 @@ TEST_DATA = [
   //example to take screenshot for instructions
   //{id: "trial_ex", pic1: "ind_edge_hn", pic2: "ind_edge_hh_v2", pic3: "ind_edge_hh", pic0: "ant_ind_h", property_pic1: "control", property_pic2: "exhaustive", property_pic3: "non-exhaustive", question: QUESTS.neutral, answer: ANSWERS.p_and_q, type: 'example-instruction'},
 
-  // critical trials
+  // critical trials (pic1: control, pic2: exhaustive, pic3: non-exhaustive)
   {id: "trial1", pic1: "if1_un_ind", pic2: "if1_un", pic3: "if2_unu", pic0: "ant_u", property_pic1: "contrast", property_pic2: "exhaustive", property_pic3: "non-exhaustive", question: QUESTS.ifp, answer: ANSWERS.if_pq, type: 'critical', expected:'', bob: _.sample(["pic2", "pic3"])},
   {id: "trial2", pic1: "if1_un_ind", pic2: "if1_un", pic3: "if2_unu", pic0: "cons_n", property_pic1: "contrast", property_pic2: "exhaustive", property_pic3: "non-exhaustive", question: QUESTS.willq, answer: ANSWERS.if_pq, type: 'critical', expected:'', bob: _.sample(["pic2", "pic3"])},
   {id: "trial3", pic1: "if1_un_ind", pic2: "if2_unn_horiz", pic3: "if1_uu", pic0: "ant_u", property_pic1: "contrast", property_pic2: "exhaustive", property_pic3: "non-exhaustive", question: QUESTS.ifp, answer: ANSWERS.if_pq, type: 'critical', expected:'', bob: _.sample(["pic2", "pic3"])},
