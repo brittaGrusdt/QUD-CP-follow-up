@@ -66,7 +66,7 @@ ordinal_model <- brm(data = df.ordinal,
                      formula =  response ~ 1 + QUD * exh + exh * nonExh + 
                        (1 + exh + nonExh + QUD | prolific_id),
                        # (1 + exh + nonExh + QUD + QUD*exh + exh * nonExh | prolific_id),
-                     seed = 1, chains = 4, cores = 4, iter = 3000,
+                     seed = 1, chains = 4, cores = 4, iter = 2000,
                      control = list(adapt_delta = 0.9))
 
 conds <- make_conditions(df.ordinal, c("exh", "nonExh"))
