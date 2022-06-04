@@ -51,7 +51,6 @@ data.critical.model = data.critical %>%
                             nonExh == "external" ~ "ext"),
          nonExh = factor(nonExh, levels = c("int", "ext")))
 
-
 # reference predictor categories are: QUD:if-p, exh:withD, nonExh:ext
 df.ordinal <- data.critical.model %>%
   mutate(response = factor(response, levels = c("NE", "both", "E"), ordered=T), 
@@ -61,11 +60,12 @@ df.ordinal <- data.critical.model %>%
          )
 contrasts(df.ordinal$response) <- contr.treatment(3)
 
+
+# Model -------------------------------------------------------------------
 ordinal_model <- brm(data = df.ordinal,
                      family = cumulative("probit"),
                      formula =  response ~ 1 + QUD * exh + exh * nonExh + 
                        (1 + exh + nonExh + QUD | prolific_id),
-                       # (1 + exh + nonExh + QUD + QUD*exh + exh * nonExh | prolific_id),
                      seed = 1, chains = 4, cores = 4, iter = 2000,
                      control = list(adapt_delta = 0.9))
 
@@ -78,21 +78,20 @@ effects
 
 summary(ordinal_model)
 
-hypothesis(ordinal_model, "QUDwillMq > 0")
 
 
-# Exploratory analysis ----------------------------------------------------
-# Thresholds
-tau1 = fixef(ordinal_model)["Intercept[1]", "Estimate"]
-tau2 = fixef(ordinal_model)["Intercept[2]", "Estimate"]
-posterior_draws = tidy_draws(ordinal_model)
+# Main hypotheses ---------------------------------------------------------
+# reference category: QUD:if-p, exh:withD, nonExh:ext (stimulus D)
+hypothesis(ordinal_model, "QUDwillMq > 0") # D
+hypothesis(ordinal_model,  "QUDwillMq + exhwoD + QUDwillMq:exhwoD > exhwoD") # B
 
-# reference category: QUD:if-p, exh:withD, nonExh:ext
-posterior_preds = function(qud, exh, non_exh, tau1=tau1, tau2=tau2, 
-                           draws=posterior_draws) {
-  
+# to test effect of QUD across stimuli, draw samples from posterior
+posterior_preds = function(model, qud=NA, exh=NA, non_exh=NA, prob_scale=F) {
   qud = str_replace(qud, "-", "") # to catch if-p/will-q inputs as well
-  samples <- draws %>% dplyr::select(starts_with("b_")) %>% 
+  samples_posterior = model %>% 
+    spread_draws(`b_Intercept[1]`, `b_Intercept[2]`, `b_QUDwillMq`, 
+                 `b_exhwoD`, `b_nonExhint`, `b_QUDwillMq:exhwoD`,
+                 `b_exhwoD:nonExhint`) %>% 
     rename(tau1 = `b_Intercept[1]`, tau2 = `b_Intercept[2]`) %>% 
     mutate(
       eta_willq_withD_ext = `b_QUDwillMq`,
@@ -102,33 +101,58 @@ posterior_preds = function(qud, exh, non_exh, tau1=tau1, tau2=tau2,
       eta_ifp_woD_int = `b_exhwoD` + `b_nonExhint` + `b_exhwoD:nonExhint`,
       eta_willq_woD_ext = `b_QUDwillMq` + `b_exhwoD` + `b_QUDwillMq:exhwoD`
     )
-  eta = paste("eta", qud, exh, non_exh, sep = "_")
   
-  if(eta == "eta_ifp_withD_ext") {
-    # predictions for reference category
-    predictions = samples %>% 
-      transmute(NE = pnorm(tau1), both = pnorm(tau2) - pnorm(tau1), 
-                E = 1 - pnorm(tau2))
-  } else {
-    predictions = samples %>% 
-      transmute(NE = pnorm(tau1 - .data[[eta]]), 
-                both = pnorm(tau2 - .data[[eta]]) - 
-                  pnorm(tau1 - .data[[eta]]),
-                E = 1 - pnorm(tau2 - .data[[eta]])) 
-  }
-  
-  predictions %>% add_column(QUD=qud, exhaustive=exh, non_exhaustive=non_exh)
+  if(prob_scale) {
+    eta = paste("eta", qud, exh, non_exh, sep = "_")
+    if(eta == "eta_ifp_withD_ext") {
+      # predictions for reference category
+      predictions = samples_posterior %>% 
+        mutate(NE = pnorm(tau1), 
+               both = pnorm(tau2) - pnorm(tau1), 
+               E = 1 - pnorm(tau2))
+      
+    } else {
+      predictions = samples_posterior %>%
+        mutate(NE = pnorm(tau1 - .data[[eta]]), 
+               both = pnorm(tau2 - .data[[eta]]) - pnorm(tau1 - .data[[eta]]),
+               E = 1 - pnorm(tau2 - .data[[eta]])) 
+    }
+    samples_posterior <- predictions %>% 
+      dplyr::select(starts_with("."), NE, both, E) %>% 
+      add_column(QUD=qud, exhaustive=exh, non_exhaustive=non_exh)
+  } 
+  return(samples_posterior)
 }
 
+# based on coefficients
+samples_posterior_coeffs = posterior_preds(ordinal_model)
+samples_posterior_coeffs %>%
+  summarize(p_main.D = mean(b_QUDwillMq > 0),
+            p_main.B = mean(eta_willq_woD_ext > eta_ifp_woD_ext), 
+            p_main = mean(c(p_main.B, p_main.D)))
+
+# same but based on predicted probabilities
 samples_posterior_probs =
-  bind_rows(posterior_preds("willq", "withD", "ext"),
-            posterior_preds("willq", "woD", "ext"),
-            posterior_preds("ifp", "withD", "ext"),
-            posterior_preds("ifp", "woD", "ext"),
-            posterior_preds("ifp", "withD", "int"),
-            posterior_preds("ifp", "woD", "int"))
+  bind_rows(posterior_preds(ordinal_model, "willq", "withD", "ext", T),
+            posterior_preds(ordinal_model, "willq", "woD", "ext", T),
+            posterior_preds(ordinal_model, "ifp", "withD", "ext", T),
+            posterior_preds(ordinal_model, "ifp", "woD", "ext", T),
+            posterior_preds(ordinal_model, "ifp", "withD", "int", T),
+            posterior_preds(ordinal_model, "ifp", "woD", "int", T)) %>% 
+  map_conditions_to_stimuli() 
 
+df.main_hypothesis = samples_posterior_probs %>% 
+  dplyr::select(.draw, QUD, stimulus, E) %>% 
+  filter(! stimulus %in% c("A", "C")) %>%  
+  group_by(QUD, stimulus) %>% 
+  pivot_wider(names_from = "QUD", values_from = "E") %>% 
+  mutate(hypothesis = willq > ifp) 
 
+df.main_hypothesis %>% summarize(p = mean(hypothesis)) %>% 
+  pivot_wider(names_from = "stimulus", values_from = "p") %>% 
+  mutate(p_main = mean(c(B, D)))
+
+# Exploratory analysis ----------------------------------------------------
 # H2: P(E | QUD=willq) > P(both | QUD=willq)
 samples_posterior_probs %>% filter(QUD == "willq") %>% 
   mutate(h2 = E > both) %>% summarize(p_h2 = mean(h2))

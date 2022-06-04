@@ -22,3 +22,14 @@ get_bootstrap_cis = function(bootstrap_samples, N=1000) {
     pivot_wider(names_from = "CI", values_from = "rate")
   return(bootstrapped_cis)
 }
+
+
+map_conditions_to_stimuli = function(data) {
+  df = tribble(~ exhaustive, ~ non_exhaustive, ~ stimulus, 
+               "woD", "int", "A", 
+               "woD", "ext", "B",
+               "withD", "int", "C",
+               "withD", "ext", "D")
+  left_join(data, df, by=c("exhaustive", "non_exhaustive"))
+}
+
