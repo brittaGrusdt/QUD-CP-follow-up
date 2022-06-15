@@ -526,13 +526,15 @@ df.ordinal <- data.critical.model %>%
          )
 contrasts(df.ordinal$response) <- contr.treatment(3)
 
+priors <- set_prior("student_t(1, 0, 2)", class = "b")
 ordinal_model <- brm(data = df.ordinal,
                      family = cumulative("probit"),
                      formula =  response ~ 1 + QUD * exh + exh * nonExh + 
                        (1 + exh + nonExh + QUD | prolific_id),
-                       # (1 + exh + nonExh + QUD + QUD*exh + exh * nonExh | prolific_id),
-                     seed = 1, chains = 4, cores = 4, iter = 3000,
-                     control = list(adapt_delta = 0.9))
+                     chains = 4, cores = 4, iter = 4000,
+                     prior = priors, control = list(adapt_delta = 0.9))
+yrep = posterior_predict(ordinal_model)
+ppc_bars_grouped(y = df.ordinal$response, yrep = yrep, group = df.ordinal$QUD)
 
 
 conds <- make_conditions(df.ordinal, c("exh", "nonExh"))
@@ -639,7 +641,7 @@ model <-
   brm(data = data.critical.model,
       family = categorical(link="logit"),
       response ~ 1 + QUD * exh * nonExh + (1 + QUD * exh * nonExh| prolific_id),
-      seed = 1, chains = 4, cores = 4, iter = 4000)
+      chains = 4, cores = 4, iter = 4000, control = list(adapt_delta = 0.9))
   saveRDS(model, file=model_path)
 }
 model_params <- fixef(model)[, 'Estimate']

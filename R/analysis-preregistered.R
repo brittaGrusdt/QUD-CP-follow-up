@@ -53,7 +53,8 @@ data.critical.model = data.critical %>%
 
 # reference predictor categories are: QUD:if-p, exh:withD, nonExh:ext
 df.ordinal <- data.critical.model %>%
-  mutate(response = factor(response, levels = c("NE", "both", "E"), ordered=T), 
+  mutate(response = factor(response, levels = c("NE", "both", "E"), ordered=T),
+         response_int = as.integer(response),
          exh = factor(exh, levels = c("withD", "woD")),
          nonExh = factor(nonExh, levels = c("ext", "int")), 
          QUD = factor(QUD, levels = c("if-p", "will-q"))
@@ -62,12 +63,17 @@ contrasts(df.ordinal$response) <- contr.treatment(3)
 
 
 # Model -------------------------------------------------------------------
+priors <- set_prior("student_t(1, 0, 2)", class = "b")
 ordinal_model <- brm(data = df.ordinal,
                      family = cumulative("probit"),
                      formula =  response ~ 1 + QUD * exh + exh * nonExh + 
                        (1 + exh + nonExh + QUD | prolific_id),
-                     seed = 1, chains = 4, cores = 4, iter = 2000,
+                     chains = 4, cores = 4, iter = 4000, prior = priors,
                      control = list(adapt_delta = 0.9))
+
+# posterior predictive checks
+yrep = posterior_predict(ordinal_model)
+ppc_bars_grouped(y = df.ordinal$response_int, yrep = yrep, group = df.ordinal$QUD)
 
 conds <- make_conditions(df.ordinal, c("exh", "nonExh"))
 effects <- conditional_effects(ordinal_model, "QUD", categorical = TRUE, 
