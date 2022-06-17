@@ -15,8 +15,8 @@ library(tidyverse)
 source("utils.R")
 
 theme_set(theme_minimal(base_size=12) + theme(legend.position = "top"))
-target_dir = here("results", "pretests")
-# target_dir = here("results")
+# target_dir = here("results", "pretests")
+target_dir = here("results")
 
 plot_dir = file.path(target_dir, "figs")
 if(!file.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
@@ -27,7 +27,10 @@ if(!file.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 Data was cleaned (see script R/clean_data.R) according to predefined exclusion criteria
 
 ```{r, message = FALSE}
-data = read_csv(here("results", "data_cleaned.csv")) %>% group_by(prolific_id)
+#data = read_csv(here("results", "data_cleaned.csv")) %>% group_by(prolific_id)
+# just excluded participants
+data = read_csv(here("results", "data_excluded_all.csv")) %>% group_by(prolific_id)
+
 data.test = data %>% filter(str_detect(trial_name, "image_selection"))
 ```
 
@@ -83,6 +86,27 @@ data.pragmatic_score %>%
   labs(x = "pragmatic score", y = "nb participants") +
   scale_x_continuous(breaks = pretty_breaks())
 ```
+
+## Control scene
+should not contain data for cleaned data, just interesting to see for excluded data
+
+```{r}
+data.control_selected = data.test %>% 
+  dplyr::select(prolific_id, response, id, type) %>% 
+  mutate(control_selected = str_detect(response, "contrast")) %>% 
+  group_by(prolific_id, type) %>% 
+  summarize(n_control = sum(control_selected), .groups = "drop_last") %>% 
+  mutate(N_control = sum(n_control))
+
+data.control_selected
+
+data.control_selected %>% distinct_at(vars(c(prolific_id, N_control))) %>% 
+  arrange(N_control)
+
+data.control_selected %>% filter(N_control == 1 & n_control == 1)
+```
+
+
 
 ## Practice trials
 
@@ -154,6 +178,10 @@ data.test_scores %>%
   geom_hline(data = df.max, aes(yintercept = max, color = type)) +
   geom_bar(stat="identity", position = position_dodge()) +
   facet_wrap(~prolific_id, scales = "free")
+
+data.test_scores %>% 
+  summarize(score = sum(score), .groups = "drop_last") %>% 
+  arrange(type, score)
 ```
 
 ## Training data
