@@ -194,33 +194,19 @@ TEST_DATA = [
   // practice trials
   {id: "trial7", pic1: "if1_un", pic2: "if2_unn_horiz", pic3: "if2_unu", pic0: "cons_n", property_pic1: "contrast", property_pic2: "literal", property_pic3: "pragmatic", question: QUESTS.neutral, answer: ANSWERS.if_p_or_yellow_q, type: 'practice', expected: 'pic3', bob:'pic3'},
   {id: "trial8", pic1: "if2_nnn_horiz", pic2: "if2_nnh_right", pic3: "if2_nnh", pic0: "ant_n", property_pic1: "contrast", property_pic2: "pragmatic", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.yellow, type: 'practice', expected:'', bob:'pic2'},
-  // {id: "trial9", pic1: "if2_nnn_horiz", pic2: "if2_unn", pic3: "if2_nnh", pic0: "cons_n", property_pic1: "contrast", property_pic2: "contrast", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.yellow_and_q, type: 'practice', expected:'pic3', bob:'pic3'},
-
-  // balance trials
-  {id: "trial10", pic1: "if1_un_ind", pic2: "if1_un", pic3: "if2_unh_ind", pic0: "ant_u", property_pic1: "contrast", property_pic2: "literal", property_pic3: "contrast", question: QUESTS.ifp, answer: ANSWERS.if_pq, type: 'filler', expected:'pic2', bob: 'pic2'},
-  // trial11: special practice trial, where participants will always loose if they only select a single scene!
   {id: "trial11", pic1: "if1_un_ind", pic2: "if1_un", pic3: "if1_un_up", pic0: "cons_n", property_pic1: "contrast", property_pic2: "literal", property_pic3: "literal", question: QUESTS.willq, answer: ANSWERS.if_pq, type: 'practice', expected:'pic2_pic3', bob: _.sample(["pic2", "pic3"])},
-  // {id: "trial12", pic1: "if2_unn_ind_horiz", pic2: "if2_unn_horiz", pic3: "if1_un_ind", pic0: "ant_u", property_pic1: "contrast", property_pic2: "literal", property_pic3: "contrast", question: QUESTS.ifp, answer: ANSWERS.if_pq, type: 'balance', expected: 'pic2', bob:'pic2'},
-  // practice-balance
-  {id: "trial13", pic1: "if2_unn_ind_horiz", pic2: "if2_unn_horiz", pic3: "if2_unn_up_horiz", pic0: "cons_n", property_pic1: "contrast", property_pic2: "literal", property_pic3: "literal", question: QUESTS.willq, answer: ANSWERS.if_pq, type: 'filler', expected:'pic2_pic3', bob: _.sample(["pic2", "pic3"])},
-  // {id: "trial14", pic1: "if2_unn_ind_horiz", pic2: "if1_un", pic3: "if2_unn_horiz", pic0: "ant_u", property_pic1: "contrast", property_pic2: "literal", property_pic3: "literal", question: QUESTS.ifp, answer: ANSWERS.if_pq, type: 'practice-balance', expected:'pic2_pic3', bob: _.sample(["pic2", "pic3"])},
-  // {id: "trial15", pic1: "if1_un_ind", pic2: "if2_unn_horiz", pic3: "if2_unn_ind_horiz", pic0: "cons_n", property_pic1: "contrast", property_pic2: "literal", property_pic3: "contrast", question: QUESTS.willq, answer: ANSWERS.if_pq, type: 'practice-balance', expected:'pic2', bob: 'pic2'},
-
-  // control-physics trials
-  // {id: "trial16", pic1: "if1_hn", pic2: "if1_nn", pic3: "if2_nnh", pic0: "cons_n", property_pic1: "contrast", property_pic2: "literal", property_pic3: "contrast", question: QUESTS.neutral, answer: ANSWERS.neither_p_nor_q, type: 'control-physics', expected:'pic2', bob:'pic2'} ,
-  // {id: "trial17", pic1: "if1_hn_ind", pic2: "if1_nn", pic3: "if1_hn", pic0: "cons_n", property_pic1: "contrast", property_pic2: "contrast", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.p_and_q, type: 'control-physics', expected:'pic3', bob:'pic3'},
-  // {id: "trial18", pic1: "if2_hnn_horiz", pic2: "if2_nnh_right", pic3: "if2_nnh", pic0: "cons_n", property_pic1: "contrast", property_pic2: "literal", property_pic3: "contrast", question: QUESTS.neutral, answer: ANSWERS.neither_p_nor_q, type: 'control-physics', expected:'pic2', bob:'pic2'},
+  {id: "trial25", pic1: "if2_unn_horiz", pic2: "if1_uu", pic3: "if1_un_ind", pic0: "ant_u", property_pic1: "contrast", property_pic2: "contrast", property_pic3: "literal", question: QUESTS.ifp, answer: ANSWERS.even_if_p_not_q, type: 'practice', expected:'pic3', bob:'pic3'}
 
   // filler-trials
+  {id: "trial10", pic1: "if1_un_ind", pic2: "if1_un", pic3: "if2_unh_ind", pic0: "ant_u", property_pic1: "contrast", property_pic2: "literal", property_pic3: "contrast", question: QUESTS.ifp, answer: ANSWERS.if_pq, type: 'filler', expected:'pic2', bob: 'pic2'},
+  {id: "trial13", pic1: "if2_unn_ind_horiz", pic2: "if2_unn_horiz", pic3: "if2_unn_up_horiz", pic0: "cons_n", property_pic1: "contrast", property_pic2: "literal", property_pic3: "literal", question: QUESTS.willq, answer: ANSWERS.if_pq, type: 'filler', expected:'pic2_pic3', bob: _.sample(["pic2", "pic3"])},
   {id: "trial19", pic1: "ind_edge_hh", pic2: "ind_edge_hnh", pic3: "ind_edge_hnn_horiz", pic0: "ant_ind_h", property_pic1: "contrast", property_pic2: "pragmatic", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.not_q, type: 'filler', expected:'', bob: _.sample(["pic2", "pic3"])},
   {id: "trial20", pic1: "ind_edge_nn", pic2: "ind_edge_nhn", pic3: "ind_edge_nhh", pic0: "ant_ind_n", property_pic1: "contrast", property_pic2: "pragmatic", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.q, type: 'filler', expected:'', bob: _.sample(["pic2", "pic3"])},
   {id: "trial21", pic1: "if1_nh", pic2: "if2_nnh_right_ind", pic3: "if2_nnn_horiz", pic0: "ant_n", property_pic1: "contrast", property_pic2: "pragmatic", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.neither_p_nor_q, type: 'filler', expected:'', bob: _.sample(["pic2", "pic3"])},
-
-  // attention check trials
-  // {id: "trial22", pic1: "if2_nnn_horiz", pic2: "if1_un_ind", pic3: "if1_un", pic0: "cons_n", property_pic1: "contrast", property_pic2: "pragmatic", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.might_p, type: 'attention-check', expected:'pic2', bob:'pic2'},
-  {id: "trial23", pic1: "ind_edge_hh", pic2: "ind_edge_hnh", pic3: "ind_edge_hnn_horiz", pic0: "ant_ind_h", property_pic1: "contrast", property_pic2: "contrast", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.neither_yellow_nor_q, type: 'attention-check', expected:'pic3', bob:'pic3'},
   {id: "trial24", pic1: "if1_nn_ind", pic2: "if2_nnh", pic3: "if2_hnh_right", pic0: "cons_n", property_pic1: "contrast", property_pic2: "pragmatic", property_pic3: "literal", question: QUESTS.willq, answer: ANSWERS.yellow_and_q, type: 'filler', expected:'pic2', bob:'pic2'},
-  {id: "trial25", pic1: "if2_unn_horiz", pic2: "if1_uu", pic3: "if1_un_ind", pic0: "ant_u", property_pic1: "contrast", property_pic2: "contrast", property_pic3: "literal", question: QUESTS.ifp, answer: ANSWERS.even_if_p_not_q, type: 'practice', expected:'pic3', bob:'pic3'}
+
+  // attention check trial
+  {id: "trial23", pic1: "ind_edge_hh", pic2: "ind_edge_hnh", pic3: "ind_edge_hnn_horiz", pic0: "ant_ind_h", property_pic1: "contrast", property_pic2: "contrast", property_pic3: "literal", question: QUESTS.neutral, answer: ANSWERS.neither_yellow_nor_q, type: 'attention-check', expected:'pic3', bob:'pic3'},
 ];
 
 PRACTICE_IDS = _.map(_.filter(TEST_DATA, function(obj){
