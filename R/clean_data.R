@@ -38,13 +38,14 @@ ids_out.attention = attention_checks %>% filter(!correct) %>%
 # 2. At least 1 selection of control picture in test trials (excluding practice)
 #  trial 10 two scenes were called contrast, but just one meant to be the control
 #  scene (pic1) used for exclusion!
-out.control_not_trial10 = data.test %>% 
+# attention-check trial is considered separately
+out.control_not_trial10 = data.test %>% filter(type != "attention-check") %>%
   dplyr::select(prolific_id, response, id, selected_pic) %>% 
   filter(id != "trial10" & str_detect(response, "contrast")) 
 ids_out.control_not_trial10  = out.control_not_trial10 %>% 
   pull(prolific_id) %>% unique()
 
-out.control_trial10 = data.test %>% 
+out.control_trial10 = data.test %>% filter(type != "attention-check") %>% 
   dplyr::select(prolific_id, response, id, selected_pic) %>% 
   filter(id == "trial10") %>% 
   filter(str_detect(response, "contrast") & str_detect(selected_pic, "pic1"))
@@ -132,12 +133,34 @@ message(paste(ratio, "% included.", sep=""))
 message(paste(n_in, " participants included.", sep=""))
 
 # Information about excluded data -----------------------------------------
-out.summary = df.out %>% group_by(id) %>% summarize(n=n()) %>% arrange(desc(n))
-out.summary %>% ggplot(aes(x=n)) + geom_bar(stat="count") + 
+df.out %>% group_by(cause) %>% summarize(n = n(), .groups = "drop_last") 
+
+all_control = left_join(tibble(id = data$prolific_id) %>% distinct(), 
+                        tibble(id = ids_out.control, control = TRUE))
+control_qud = left_join(all_control, tibble(id = ids_out.check_ann, qud = TRUE))
+control_qud_attention = left_join(control_qud, 
+                                  tibble(id = ids_out.attention, attention = T))
+control_qud_attention_rt = left_join(control_qud_attention,
+                                     tibble(id = ids_out.rts, rt = T))
+df.out.all = left_join(control_qud_attention_rt,
+                       tibble(id=ids_out.comments, comment = T)) %>% 
+  replace_na(list(control = F, qud = F, attention = F, rt = F, comment = F)) %>% 
+  unite("control_qud_attention_rt_comment", 
+        control, qud, attention, rt, comment) %>% 
+  group_by(control_qud_attention_rt_comment) %>% 
+  filter(str_detect(control_qud_attention_rt_comment, "TRUE")) %>% 
+  dplyr::count() %>% 
+  separate("control_qud_attention_rt_comment", 
+           into = c("control", "qud", "attention", "rt", "comment"), sep = "_") %>% 
+  arrange(desc(n))
+df.out.all
+
+out.by_id = df.out %>% group_by(id) %>% summarize(n=n()) %>% arrange(desc(n))
+out.by_id %>% ggplot(aes(x=n)) + geom_bar(stat="count") + 
   labs(x = "# criteria failed in", y = "# participants", title = "excluded data")
 
-out.several = out.summary %>% filter(n > 1) %>% pull(id) %>% unique()
-out.one_cause = out.summary %>% filter(n == 1) %>% pull(id) %>% unique()
+out.several = out.by_id %>% filter(n > 1) %>% pull(id) %>% unique()
+out.one_cause = out.by_id %>% filter(n == 1) %>% pull(id) %>% unique()
 
 ratio = length(out.several) / length(ids_out)
 message(paste("from those that were excluded, ", round(ratio*100, 2),
@@ -145,7 +168,7 @@ message(paste("from those that were excluded, ", round(ratio*100, 2),
 
 
 # reasons for those who are excluded just because of one criteria
-ids_out.one_cause = out.summary %>% filter(n==1) %>% pull(id) 
+ids_out.one_cause = out.by_id %>% filter(n==1) %>% pull(id) 
 df.out %>% filter(id %in% out.one_cause) %>% 
   group_by(cause) %>% summarize(n=n())
 
