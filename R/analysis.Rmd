@@ -26,19 +26,20 @@ if(!file.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 
 Data was cleaned (see script R/clean_data.R) according to predefined exclusion criteria
 
-```{r, message = FALSE}
-#data = read_csv(here("results", "data_cleaned.csv")) %>% group_by(prolific_id)
+```{r, message = FALSE, warning = FALSE}
+data = read_csv(here("results", "data_cleaned.csv")) %>% group_by(prolific_id)
 # just excluded participants
-data = read_csv(here("results", "data_excluded_all.csv")) %>% group_by(prolific_id)
+# data = read_csv(here("results", "data_excluded_all.csv")) %>% group_by(prolific_id)
 
-data.test = data %>% filter(str_detect(trial_name, "image_selection"))
+data.test = data %>% filter(str_detect(block, "test"))
+data.practice = data %>% filter(str_detect(block, "practice"))
 ```
 
 ## Participants' responses to questions shown in the end
 
 ```{r}
 data %>% dplyr::select(submission_id, check_ann) %>% 
-  distinct() %>% group_by(check_ann) %>% dplyr::count()
+  distinct() %>% group_by(check_ann) %>% dplyr::count() %>% arrange(desc(n))
 data %>% dplyr::select(submission_id, check_behavior) %>% 
   distinct() %>% group_by(check_behavior) %>% dplyr::count()
 ```
@@ -55,16 +56,10 @@ data.lit_prag %>%
   ggplot(aes(x=id, fill=response)) + 
   geom_bar(stat="count", position=position_dodge()) +
   scale_y_continuous(breaks = pretty_breaks())
-
-pic_props = data.test %>% ungroup() %>% 
-  select(starts_with("property_"), type, id) %>% 
-  unite(col="props", "property_pic1", "property_pic2", "property_pic3", sep="_") %>% 
-  distinct() %>% arrange(type)
-
-pic_props %>% filter(id %in% trials_lit_prag)
 ```
 
 ## "Pragmatic" scores
+
 Scores for participants how pragmatic their responses were. 
 1: pragmatic picture selected (pragmatic)
 0.5: pragmatic + literal picture selected (literal2)
@@ -87,38 +82,26 @@ data.pragmatic_score %>%
   scale_x_continuous(breaks = pretty_breaks())
 ```
 
-## Control scene
-should not contain data for cleaned data, just interesting to see for excluded data
+## sanity check: control scene
+
+(should be an empty dataframe) 
+Note that in trial10 (filler) two scenes called 'contrast', just pic1 is 
+the control scene participants should not select (in other contrast-scene, 
+utterance is indeed literally true)
 
 ```{r}
-data.control_selected = data.test %>% 
-  dplyr::select(prolific_id, response, id, type) %>% 
-  mutate(control_selected = str_detect(response, "contrast")) %>% 
-  group_by(prolific_id, type) %>% 
-  summarize(n_control = sum(control_selected), .groups = "drop_last") %>% 
-  mutate(N_control = sum(n_control))
-
-data.control_selected
-
-data.control_selected %>% distinct_at(vars(c(prolific_id, N_control))) %>% 
-  arrange(N_control)
-
-data.control_selected %>% filter(N_control == 1 & n_control == 1)
+data.test %>% 
+  dplyr::select(prolific_id, id, type, response, selected_pic) %>% 
+  filter(str_detect(response, "contrast") & str_detect(selected_pic, "pic1"))
 ```
-
-
 
 ## Practice trials
 
 ```{r}
-data.practice = data.test %>% filter(type == "practice") %>% 
-   dplyr::select(submission_id, response, id)
-
-data.practice %>% ggplot(aes(x=id, fill=response)) + 
+data.practice %>%
+  ggplot(aes(x=id, fill=response)) + 
   geom_bar(stat="count", position=position_dodge()) +
   scale_y_continuous(breaks = pretty_breaks())
-
-pic_props %>% filter(type == "practice")
 ```
 
 ## Trials where we'd expect selection of exhaustive + non-exhaustive
@@ -134,8 +117,6 @@ data.risk <- data %>% filter(id %in% risk_trials) %>%
 data.risk %>% ggplot(aes(x=id, fill=response)) + 
   geom_bar(stat="count", position=position_dodge()) +
   scale_y_continuous(breaks= pretty_breaks())
-
-pic_props %>% filter(id %in% risk_trials)
 ```
 
 ## Meta information about participants
