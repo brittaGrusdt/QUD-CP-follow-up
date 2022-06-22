@@ -38,9 +38,9 @@ data.practice = data %>% filter(str_detect(block, "practice"))
 ## Participants' responses to questions shown in the end
 
 ```{r}
-data %>% dplyr::select(submission_id, check_ann) %>% 
+data %>% dplyr::select(prolific_id, check_ann) %>%
   distinct() %>% group_by(check_ann) %>% dplyr::count() %>% arrange(desc(n))
-data %>% dplyr::select(submission_id, check_behavior) %>% 
+data %>% dplyr::select(prolific_id, check_behavior) %>%
   distinct() %>% group_by(check_behavior) %>% dplyr::count()
 ```
 
@@ -49,13 +49,15 @@ data %>% dplyr::select(submission_id, check_behavior) %>%
 ```{r}
 trials_lit_prag = c("trial7", "trial8", "trial19", "trial20", "trial21", "trial24")
 data.lit_prag <- data %>% filter(id %in% trials_lit_prag) %>% 
-  dplyr::select(submission_id, response, type, id, response) %>% group_by(id)
+  dplyr::select(prolific_id, response, type, id, response) %>% group_by(id)
 
 # by trials
 data.lit_prag %>% 
   ggplot(aes(x=id, fill=response)) + 
   geom_bar(stat="count", position=position_dodge()) +
-  scale_y_continuous(breaks = pretty_breaks())
+  scale_y_continuous(breaks = pretty_breaks()) +
+  facet_wrap(~type, scales = "free_x") +
+  guides(fill = guide_legend(ncol = 3))
 ```
 
 ## "Pragmatic" scores
@@ -73,13 +75,15 @@ data.pragmatic_score = data.lit_prag %>%
   mutate(score = case_when(response == "pragmatic" ~ 1,
                            response == "literal" ~ 0, 
                            T ~ 0.5)) %>% 
-  group_by(submission_id) %>% summarize(score = sum(score), .groups = "drop") %>% 
+  group_by(prolific_id) %>% summarize(score = sum(score), .groups = "drop") %>%
   mutate(relative_score = round(score / 6, 2))
 
 data.pragmatic_score %>% 
   ggplot(aes(x=score)) + geom_bar() + 
   labs(x = "pragmatic score", y = "nb participants") +
   scale_x_continuous(breaks = pretty_breaks())
+
+data.pragmatic_score %>% summarize(abs = mean(score), rel = mean(relative_score))
 ```
 
 ## sanity check: control scene
@@ -112,11 +116,13 @@ Trial11 is a practice trial, trial13 a filler trial.
 ```{r}
 risk_trials = c("trial11", "trial13")
 data.risk <- data %>% filter(id %in% risk_trials) %>% 
-  dplyr::select(submission_id, response, id, type)
+  dplyr::select(prolific_id, response, id, type)
 
 data.risk %>% ggplot(aes(x=id, fill=response)) + 
   geom_bar(stat="count", position=position_dodge()) +
-  scale_y_continuous(breaks= pretty_breaks())
+  scale_y_continuous(breaks= pretty_breaks()) +
+  guides(fill = guide_legend(nrow=2))
+
 ```
 
 ## Meta information about participants
@@ -145,24 +151,17 @@ Horizontal lines are maximal scores that can be reached in respective trials
 
 ```{r}
 data.test_scores = data %>% filter(type != "training") %>% 
-  dplyr::select(prolific_id, submission_id, score, type, id) %>%
+  dplyr::select(prolific_id, score, type, id) %>%
   group_by(type, prolific_id) %>%
-  mutate(prolific_id = as.factor(prolific_id))
+  summarize(score = sum(score), .groups = "drop_last")
 
-df.max = data.test_scores %>% group_by(type) %>% dplyr::select(type, id) %>% 
-  distinct() %>% summarize(n=n()) %>% 
-  mutate(max = case_when(type == "practice" ~ n*100-50, 
-                         T ~ n * 100))
-data.test_scores %>% 
-  summarize(score = sum(score), .groups = "drop_last") %>% 
-  ggplot(aes(x=prolific_id, y=score, fill=type)) + 
-  geom_hline(data = df.max, aes(yintercept = max, color = type)) +
-  geom_bar(stat="identity", position = position_dodge()) +
-  facet_wrap(~prolific_id, scales = "free")
-
-data.test_scores %>% 
-  summarize(score = sum(score), .groups = "drop_last") %>% 
-  arrange(type, score)
+xticks = data.test_scores$score %>% unique %>% sort()
+data.test_scores %>% mutate(score = score / 100) %>% 
+  ggplot(aes(x=score, fill=type)) + 
+  geom_bar(stat="count") + labs(y = "nb participants") + 
+  scale_x_continuous(breaks=xticks/100) +
+  facet_wrap(~type, scales = "free") +
+  theme(axis.text.x = element_text(size = 07))
 ```
 
 ## Training data
@@ -177,8 +176,8 @@ data.train = data %>% filter(type=="training") %>%
 data.train %>% dplyr::select(prolific_id, id, correct) %>% 
   summarize(nb_trials = n(), nb_correct = sum(correct)) %>% 
   mutate(ratio_correct = nb_correct / nb_trials) %>% 
-  ggplot(aes(x=prolific_id, y=ratio_correct)) + geom_bar(stat="identity") +
-  geom_hline(aes(yintercept = 0.5))
+  ggplot(aes(x=ratio_correct)) + geom_bar(stat="count") + 
+  labs(y = "nb participants")
 
 # ratio correct per trial number (different order per participant)
 train.correct.nb = data.train %>% group_by(trial_number) %>% 
@@ -204,8 +203,7 @@ train.correct.id %>%
 Plot critical trials with 95%-bootstrap confidence intervals
 
 ```{r, data-critical, echo=FALSE}
-data.critical = data %>% 
-  filter(type=="critical") %>% 
+data.critical <- data %>% filter(type == "critical") %>% 
   dplyr::select(submission_id, prolific_id, id, type, QUD, response, 
                 selected_pic, pic2, pic3, RT) %>% 
   mutate(pic2=str_replace(pic2, ".png", ""), pic2=str_replace(pic2, "_horiz", ""),
@@ -225,6 +223,8 @@ data.critical = data %>%
                          QUD == "ifp" ~ "if-p", 
                          T ~ QUD))
 ```
+
+Get bootstrap intervals
 
 ```{r}
 df.critical <- data.critical %>% 
@@ -246,101 +246,114 @@ bootstrap_samples = bind_rows(
   get_bootstrap_statistics(df.crit.nonExh, "non-exhaustive"),
   get_bootstrap_statistics(df.crit.other, "other selection")
 ) %>% group_by(pic_condition, stimulus, QUD, response)
+
 CIs <- get_bootstrap_cis(bootstrap_samples)
+CIs.across_BD = CIs %>% filter(stimulus == "B" | stimulus == "D") %>% 
+  group_by(QUD, response) %>% 
+  summarize(ci.low = mean(ci.low), ci.up = mean(ci.up), .groups = "drop_last")
 
-data.critical.rate = df.critical %>% 
-  group_by(pic_condition, stimulus, QUD, response) %>% 
-  summarize(n=n(), .groups = "drop_last") %>% 
-  mutate(ratio = n/sum(n))
-
-data.critical.rate = left_join(data.critical.rate, CIs, 
-  by=c("QUD", "pic_condition", "stimulus", "response")) %>% 
-  mutate(pic_condition = factor(pic_condition, 
-                              levels = c("w/oDistractor-internal", 
-                                         "w/oDistractor-external", 
-                                         "withDistractor-internal",
-                                         "withDistractor-external")), 
-         response = factor(response, levels = c("non-exhaustive", "both",
-                                              "exhaustive")),
-         QUD = as.factor(QUD))
-```
-
-## Plotted across all different picture combinations
-
-```{r}
 QUDs = list(neutral = "Which blocks do you think will fall?",
             `if-p` = "What happens if the 'antecedent-block' falls?",
             `will-q` = "Will the 'consequent-block' fall?")
-data.critical %>%
+```
+
+## Plotted across all different picture combinations (just stimulus B + D)
+to compare QUD:will-q vs. QUD:if-p
+
+```{r}
+df.critical.BD = data.critical %>% filter(stimulus == "B" | stimulus == "D") %>% 
   mutate(response = factor(response, levels = c("non-exhaustive", "both",
-                                                "exhaustive"))) %>% 
+                                                "exhaustive"))) 
+df.critical.BD %>% 
   ggplot(aes(fill=response, y=QUD)) + 
   geom_bar(position=position_dodge(preserve = 'single')) +
-  scale_y_discrete(breaks=names(QUDs), labels = QUDs) + 
-  labs(y="Ann's question") +
-  guides(fill = guide_legend(ncol = 2))
+  scale_y_discrete(breaks=names(QUDs)) +#, labels = QUDs) + 
+  labs(y="Ann's question", title="across stimuli B + D") +
+  guides(fill = guide_legend(ncol = 3))
 
 # same plot with exhaustive-picture selection ratios instead of absolute numbers
-data.critical.rate %>% group_by(QUD, response) %>% 
-  mutate(ratio = mean(ratio)) %>% 
-  distinct_at(vars(c(QUD, response)), .keep_all = T) %>% 
+data.critical.rate.BD = df.critical.BD %>% group_by(QUD, response) %>%
+  summarize(n=n(), .groups = "drop_last") %>% mutate(ratio = n/sum(n))
+data.critical.rate_with_cis.BD = 
+  left_join(data.critical.rate.BD, CIs.across_BD, by=c("QUD", "response")) %>%
+  mutate(response = factor(response, levels = c("non-exhaustive", "both",
+                                              "exhaustive")), QUD = as.factor(QUD))
+
+data.critical.rate_with_cis.BD %>% 
   ggplot(aes(x=ratio, y=QUD, fill=response, group = response)) + 
   geom_bar(stat="identity", position = position_dodge()) + 
   geom_errorbar(aes(xmin=ci.low, xmax=ci.up), 
                 position = position_dodge()) +
   geom_text(aes(label=round(ratio, 2)), hjust=-0.25, vjust=-0.45, color = 'blue',
             position = position_dodge(width = .9)) +
-  scale_y_discrete(breaks=names(QUDs), labels = QUDs) + 
-  labs(y="Ann's question", x="selection rate") +
+  scale_y_discrete(breaks=names(QUDs)) + #, labels = QUDs) + 
+  labs(y="Ann's question", x="selection rate", title="across stimuli B + D") +
   guides(fill = guide_legend(ncol = 2))
 
-# point plot
+# again as point plot, not bar plot
 w_dodge = 0.25
-p = data.critical.rate %>% group_by(QUD, response) %>% 
-  mutate(ratio = mean(ratio)) %>% 
-  distinct_at(vars(c(QUD, response)), .keep_all = T) %>% 
+p = data.critical.rate_with_cis.BD %>% group_by(QUD, response) %>% 
   ggplot(aes(y=ratio, x=QUD, color=response, group=response)) + 
   geom_point(position = position_dodge(width=w_dodge)) +
   geom_line(position = position_dodge(width = w_dodge)) +
   geom_errorbar(aes(ymin=ci.low, ymax=ci.up), width=0.1, 
                 position = position_dodge(width=w_dodge)) +
-  labs(y="selection rate", x = "QUD")
+  labs(y="selection rate", x = "QUD", title="across stimuli B + D")
 p
 ```
 
-## plotted separately for each picture combination
+## Plotted separately for each picture combination
 
 ```{r}
-p = data.critical.rate %>% 
+# same plot with exhaustive-picture selection ratios instead of absolute numbers
+data.critical.rate.by_stimulus = data.critical %>%
+    # filter(!prolific_id %in% ids.critical_always_exhaustive & 
+    #        !prolific_id %in% ids.selected_always_two) %>% 
+  group_by(pic_condition, stimulus, QUD, response) %>%
+  summarize(n=n(), .groups = "drop_last") %>% mutate(ratio = n/sum(n))
+
+data.critical.rate.by_stimulus_with_cis =
+  left_join(data.critical.rate.by_stimulus, CIs, 
+            by = c("pic_condition", "stimulus", "QUD", "response")) %>%
+  mutate(response = factor(response, 
+                           levels = c("non-exhaustive", "both", "exhaustive")),
+         QUD = as.factor(QUD))
+
+p = data.critical.rate.by_stimulus_with_cis %>% 
   ggplot(aes(x=ratio, y=QUD, fill=response, group=response)) + 
   geom_bar(stat="identity", position = position_dodge()) + 
   geom_errorbar(aes(xmin=ci.low, xmax=ci.up), position = position_dodge()) +
   geom_text(aes(label=round(ratio, 2)), hjust=-0.25, vjust=-0.3,
-            position = position_dodge(width = .9), color='blue') +
-  facet_wrap(~pic_condition) + 
+            position = position_dodge(width = .9), size = 2.5, color='blue') +
+  facet_wrap(~stimulus) +
   labs(x="selection rate", y = "QUD")
 p
 ggsave(here(plot_dir, "selection-rates-barplot.pdf"), p, width=7, height=4)
 
 w_dodge = 0.25
-p = data.critical.rate %>% 
+p = data.critical.rate.by_stimulus_with_cis %>% 
+  filter(stimulus %in% c("B", "D")) %>% 
   ggplot(aes(y=ratio, x=QUD, color=response, group=response)) + 
   geom_point(position = position_dodge(width=w_dodge)) +
   geom_line(position = position_dodge(width = w_dodge)) +
   geom_errorbar(aes(ymin=ci.low, ymax=ci.up), width=0.1, 
                 position = position_dodge(width=w_dodge)) +
-  facet_wrap(~pic_condition) + 
+  facet_wrap(~stimulus, scales = "free") + 
   labs(y="selection rate", x = "QUD")
 p
-ggsave(here(plot_dir, "selection-rates.pdf"), p, width=7, height=4)
+data.critical.rate.by_stimulus_with_cis %>% 
+  filter(stimulus %in% c("B", "D"))
+ggsave(here(plot_dir, "selection-rates.pdf"), p, width=5, height=4)
+
 ```
+
 
 ##  Responses for QUD:will-q and QUD:if-p plotted together
 
 ```{r}
 get_responses_all_QUDs = function(dat){
   df = dat %>% group_by(submission_id, pic_condition, stimulus) %>% 
-    dplyr::select(submission_id, pic_condition, stimulus, QUD, response)
+    dplyr::select(submission_id, prolific_id, pic_condition, stimulus, QUD, response)
 
   df.wide = df %>% group_by(pic_condition, stimulus, submission_id) %>% 
     mutate(response = str_replace(response, "non-exhaustive", "NE"), 
@@ -358,10 +371,10 @@ plot_responses_all_QUDs = function(dat) {
     dplyr::count() %>% group_by(stimulus) %>% mutate(N=sum(n), ratio=n/N)
   
   xlab = "selected situations for both QUDs: if-p/will-q"
-  p <- df.wide.count %>% ggplot(aes(x=response, y=ratio , fill=response)) + 
+  p <- df.wide.count %>% ggplot(aes(y=response, x=ratio , fill=response)) + 
     geom_bar(stat="identity", position=position_dodge()) +
     geom_label(aes(label=n)) +
-    scale_fill_brewer(palette='Set2', name="response ifp_willq") +
+    scale_fill_brewer(palette='Set3', name="response ifp_willq") +
     facet_wrap(~stimulus, nrow = 2, scales = "free") +
     theme(legend.position = "none") +
     labs(y = "ratio participants", x=xlab)
@@ -376,8 +389,7 @@ ggsave(file.path(plot_dir, "empirical-responses.pdf"), p, width=7, height=4)
 
 Score participants: for the two critical stimuli that occur with both QUDs (B +
 D), participants receive 1 point if they differentiate the QUDs ifp_willq, i.e.
-when they choose the exhaustive picture for one QUD and the non-exhaustive for
-the other (independent of direction). A score of 0 then means that the
+when they make different selections for the two QUDs. A score of 0 then means that the
 respective participant never made a difference between the two QUDs and a score
 of two that participant always made a difference between them.
 
@@ -387,49 +399,64 @@ responses.all_quds = get_responses_all_QUDs(data.critical) %>%
   mutate(score = case_when(ifp == willq ~ 0, T ~ 1)) %>%
   filter(willq != "-") # some stimuli are not included with QUD=will-q
 
-df.qud_scores = responses.all_quds %>% group_by(submission_id) %>%
-  summarize(score.total=sum(score))
+df.qud_scores = responses.all_quds %>% group_by(submission_id, prolific_id) %>%
+  summarize(score.total=sum(score), .groups = "drop_last")
 df.qud_scores.summary = df.qud_scores %>% group_by(score.total) %>% 
   dplyr::count() %>% ungroup() %>% mutate(N=sum(n)) %>% 
   mutate(ratio = n/N)
 
 df.qud_scores.summary %>% ggplot(aes(x=score.total, y=ratio)) + 
-  geom_bar(stat="identity") +
+  geom_bar(stat="identity") + geom_text(aes(label = round(ratio, 2))) +
   labs(x="nb times participants gave different answers for different QUDs", 
        y = "nb participants")
 
-ids.scores12 <- df.qud_scores %>% filter(score.total <= 2 & score.total >= 1) %>% 
-  pull(submission_id)
-plot_responses_all_QUDs(data.critical %>% filter(submission_id %in% ids.scores12)) +
-  ggtitle("Participants with 0 or 1 ignorance of QUD")
+# never differentiate QUDs
+ids.score0 <- df.qud_scores %>% filter(score.total == 0) %>% pull(submission_id)
+plot_responses_all_QUDs(data.critical %>% filter(submission_id %in% ids.score0)) +
+  ggtitle("Participants who always ignored QUD")
+
+# sometimes differentiate QUDs
+ids.score1_or_2 <- df.qud_scores %>% filter(score.total >= 1) %>% pull(submission_id)
+plot_responses_all_QUDs(data.critical %>% filter(submission_id %in% ids.score1_or_2)) +
+  ggtitle("Participants who sometimes ignored QUD")
+
+# always differentiate QUDs
+ids.score2 <- df.qud_scores %>% filter(score.total == 2) %>% pull(submission_id)
+plot_responses_all_QUDs(data.critical %>% filter(submission_id %in% ids.score2)) +
+  ggtitle("Participants who never ignored QUD")
 ```
 
 Those who never take QUD into account, do they switch between exh-exh and 
-nonExh-nonExh or always give the same (identical) answer?
+nonExh-nonExh or give the same (identical) answer for both, stimulus B and 
+stimulus D?
 
 ```{r}
-ids.score0 = df.qud_scores %>% filter(score.total == 0) %>% pull(submission_id)
 df.ignored_qud = responses.all_quds %>% filter(submission_id %in% ids.score0) %>% 
   group_by(submission_id, ifp, willq) %>% 
   dplyr::count(name="nb_stimuli") %>%
   arrange(submission_id) %>% 
   rename(selection = ifp) %>% ungroup() %>% dplyr::select(-willq) %>% 
   mutate(switch_answer = case_when(nb_stimuli == 2 ~ FALSE, TRUE ~ TRUE))
-df.ignored_qud
+
+df.ignored_qud %>% group_by(selection, nb_stimuli, switch_answer) %>% 
+  dplyr::count() %>% arrange(switch_answer, n) %>% 
+  ungroup() %>% mutate(N=sum(n))
+# only 10% of participants switch answers!
 
 # plot QUD-score from test trials against pragmatic score from practice trials
 # pair with participants pragmatic scores
 scores = left_join(df.qud_scores %>% rename(score_qud = score.total) %>% 
                      mutate(score_qud = as.integer(score_qud)), 
                    data.pragmatic_score %>% 
-                     dplyr::select(submission_id, relative_score) %>% 
+                     dplyr::select(prolific_id, relative_score) %>% 
                      rename(score_pragmatic = relative_score), 
-          by="submission_id")
+          by="prolific_id")
 
 scores %>% 
-  mutate(submission_id = as.factor(submission_id), 
+  mutate(prolific_id = as.factor(prolific_id), 
          score_qud = as.factor(score_qud)) %>% 
   ggplot(aes(x=score_qud, y=score_pragmatic)) +
+  geom_boxplot() +
   geom_jitter(width=0.2) + theme(legend.position = "none")
 
 ```
@@ -437,14 +464,13 @@ scores %>%
 ## Plot empirical selection rates
 
 ```{r}
-df <- data.critical.rate %>% 
+df <- data.critical.rate.by_stimulus_with_cis %>% 
   separate(col = pic_condition, into = c("exh_situation", "nonExh_situation"), sep="-") %>%
   mutate(exh_situation = factor(exh_situation, levels = c("withDistractor", "w/oDistractor")),
          response = str_replace(response, "non-exhaustive", "nonExh"),
                     response = str_replace(response, "exhaustive", "exh"))
 
 w_dodge = 0.25
-
 p1 <- df %>%
   ggplot(aes(x=exh_situation, y=ratio, color = response, shape = stimulus)) +  
              # group=interaction(QUD, nonExh_situation))) +
@@ -499,66 +525,74 @@ ggsave(file.path(plot_dir, "empirical-responses-rates-fig3.pdf"), p2,
 
 # Bayesian regression models
 
-Prepare Data
-
-```{r}
-data.critical.model = data.critical %>% 
-  dplyr::select(-picPair, -selected_pic, -submission_id, -type, -id) %>% 
-  mutate(picPair = pic_condition, 
-         nb_selected = str_count(response, "_") + 1,
-         response = case_when(nb_selected == 3 ~ "all", T ~ response),
-         response = str_replace(response, "non-exhaustive", "NE"),
-         response = str_replace(response, "exhaustive", "E"), 
-         response = str_replace(response, "contrast", "C"), 
-         response = str_replace(response, "E_NE", "both"), 
-         QUD = as.factor(QUD)) %>% 
-  separate(col = pic_condition, into = c("exh", "nonExh"), sep="-") %>% 
-  mutate(exh = case_when(exh == "w/oDistractor" ~ "woD", 
-                         exh == "withDistractor" ~ "withD"),
-         exh = factor(exh, levels = c("woD", "withD")), 
-         nonExh = case_when(nonExh == "internal" ~ "int", 
-                            nonExh == "external" ~ "ext"),
-         nonExh = factor(nonExh, levels = c("int", "ext")))
-```
-
-
 ## Bayesian ordinal regression model
 
 ###  Main analysis 
 
 ```{r}
-df.ordinal <- data.critical.model %>%
-  mutate(response = factor(response, levels = c("NE", "both", "E"), ordered=T), 
-         exh = factor(exh, levels = c("withD", "woD")),
-         nonExh = factor(nonExh, levels = c("ext", "int")), 
-         QUD = factor(QUD, levels = c("if-p", "will-q"))
-         )
-contrasts(df.ordinal$response) <- contr.treatment(3)
+ordinal_model <- readRDS(here("statistical-ordinal-brms-model.rds"))
+df.ordinal <- ordinal_model$data %>% as_tibble() %>% 
+    mutate(response = factor(response, levels=c("NE", "both", "E"), ordered=T),
+           response_int = as.integer(response)) %>% 
+  mutate(exhaustive = exh, non_exhaustive = nonExh) %>% 
+  map_conditions_to_stimuli()
 
-priors <- set_prior("student_t(1, 0, 2)", class = "b")
-ordinal_model <- brm(data = df.ordinal,
-                     family = cumulative("probit"),
-                     formula =  response ~ 1 + QUD * exh + exh * nonExh + 
-                       (1 + exh + nonExh + QUD | prolific_id),
-                     chains = 4, cores = 4, iter = 4000,
-                     prior = priors, control = list(adapt_delta = 0.9))
 yrep = posterior_predict(ordinal_model)
-ppc_bars_grouped(y = df.ordinal$response, yrep = yrep, group = df.ordinal$QUD)
+ppc_bars_grouped(y = df.ordinal$response_int, yrep = yrep, group = df.ordinal$QUD)
+ppc_bars_grouped(y = df.ordinal$response_int, yrep = yrep, group = df.ordinal$stimulus)
 
+pp_check(ordinal_model, type = 'hist')
+pp_check(ordinal_model, type= 'stat', stat = 'mean', nsamples = 100)
 
-conds <- make_conditions(df.ordinal, c("exh", "nonExh"))
-effects <- conditional_effects(ordinal_model, "QUD", categorical = TRUE, 
-                               conditions = conds, robust = T, 
-                               re_formula = NA)
-# effects$`QUD:cats__`
-effects
+conds_stimuli <- make_conditions(df.ordinal, c("exh", "nonExh"))
+effects <- conditional_effects(ordinal_model, c("QUD"), categorical=T, 
+                               conditions=conds_stimuli, robust=T, re_formula=NA, 
+                               metho)
+effects 
 
-summary(ordinal_model)
+cond_effects = effects$`QUD:cats__` %>% as_tibble() %>% 
+  mutate(response = as.character(cats__),
+         response = case_when(response == "NE" ~ "non-exhaustive",
+                              response == "E" ~ "exhaustive", 
+                              T ~ response)) %>% 
+  rename(exhaustive = exh, non_exhaustive = nonExh,
+         ratio = `estimate__`, ci.low = `lower__`, 
+         ci.up = `upper__`) %>% 
+  map_conditions_to_stimuli() %>% 
+  dplyr::select(stimulus, QUD, response, ratio, ci.low, ci.up)
 
+#prediction for will-q larger than for ifp in respective stimuli
 hypothesis(ordinal_model, "QUDwillMq > 0") # stimulus D
 hypothesis(ordinal_model,  "QUDwillMq + exhwoD + QUDwillMq:exhwoD > exhwoD") # B
+```
 
-# to test effect of QUD across stimuli, draw samples from posterior
+
+<!-- Plot predictions with observed data -->
+
+```{r}
+# df <- bind_rows(data.critical.rate.by_stimulus_with_cis %>% 
+#                   ungroup() %>% dplyr::select(-pic_condition, -n) %>% 
+#                   add_column(data = "observed"), 
+#                 cond_effects %>% add_column(data = "predicted"))
+# w_dodge = 0.25
+# 
+# p = df %>%
+#   ggplot(aes(y=ratio, x=QUD, color=data, group=interaction(response, data), 
+#              shape = response)) + 
+#   geom_point(position = position_dodge(width=w_dodge)) +
+#   geom_line(position = position_dodge(width = w_dodge)) +
+#   geom_errorbar(aes(ymin=ci.low, ymax=ci.up), width=0.1, 
+#                 position = position_dodge(width=w_dodge)) +
+#   facet_wrap(~stimulus, scales = "free_x") + 
+#   labs(y="selection rate", x = "QUD")
+# p
+# ggsave(file.path(plot_dir, "observed-with-predictions.pdf"), p, width=7, height=5)
+```
+
+
+To test effect of QUD across stimuli, draw samples from posterior
+
+```{r}
 posterior_preds = function(model, qud=NA, exh=NA, non_exh=NA, prob_scale=F) {
   qud = str_replace(qud, "-", "") # to catch if-p/will-q inputs as well
   samples_posterior = model %>% 
@@ -616,7 +650,6 @@ samples_posterior_probs =
 
 df.main_hypothesis = samples_posterior_probs %>% 
   dplyr::select(.draw, QUD, stimulus, E) %>% 
-  filter(! stimulus %in% c("A", "C")) %>%  
   group_by(QUD, stimulus) %>% 
   pivot_wider(names_from = "QUD", values_from = "E") %>% 
   mutate(hypothesis = willq > ifp) 
@@ -624,24 +657,112 @@ df.main_hypothesis = samples_posterior_probs %>%
 df.main_hypothesis %>% summarize(p = mean(hypothesis)) %>% 
   pivot_wider(names_from = "stimulus", values_from = "p") %>% 
   mutate(p_main = mean(c(B, D)))
+
+```
+Note: we looked at the selection rate of the exhaustive situation, looking at the selection rate of both (exhaustive + non-exhaustive) yields the same results since the third option (non-exhaustive situation) is rarely selected.
+
+```{r}
+df.both = samples_posterior_probs %>% 
+  filter(stimulus == "B" | stimulus == "D") %>% 
+  dplyr::select(.draw, QUD, stimulus, both) %>% 
+  group_by(QUD, stimulus) %>% 
+  pivot_wider(names_from = "QUD", values_from = "both") %>% 
+  mutate(hypothesis_both = ifp > willq) %>% 
+  summarize(hypothesis_both = mean(hypothesis_both))
+df.both
 ```
 
 ### Exploratory analysis
 
 ```{r}
 # H2: P(E | QUD=willq) > P(both | QUD=willq)
-samples_posterior_probs %>% filter(QUD == "willq") %>% 
-  mutate(h2 = E > both) %>% summarize(p_h2 = mean(h2))
+samples_posterior_probs %>% filter(QUD == "willq") %>% mutate(h2 = E > both) %>%
+  group_by(stimulus) %>% summarize(p_h2 = mean(h2)) %>% 
+  mutate(p_h2.across = mean(p_h2))
 
 # H3: P(both | QUD=ifp) > P(E | QUD=ifp)
+samples_posterior_probs %>% filter(QUD == "ifp") %>% mutate(h3 = both > E) %>%
+  group_by(stimulus) %>% summarize(p_h3 = mean(h3)) %>% 
+  mutate(p_h3.across = mean(p_h3))
+```
+
+For stimulus A and C P(both | QUD=ifp) > P(E | QUD=ifp) is 1. 
+ - What about P(both | QUD=willq) > P(E | QUD=willq)? (stimuli B+D)
+ - further, is  P(E | QUD=ifp) > P(NE | QUD=ifp)
+
+```{r}
+samples_posterior_probs %>% filter(QUD == "willq") %>% 
+  mutate(h3_willq = both > E) %>% group_by(stimulus) %>% 
+  summarize(p_h3_willq = mean(h3_willq)) %>% 
+  mutate(p_h3_willq.across = mean(p_h3_willq))
+
 samples_posterior_probs %>% filter(QUD == "ifp") %>% 
-  mutate(h3 = both > E) %>% summarize(p_h3 = mean(h3))
+  mutate(h = E > NE) %>% group_by(stimulus) %>% 
+  summarize(p_h = mean(h)) %>% 
+  mutate(p_h.across = mean(p_h))
+
+# NE > E?
+samples_posterior_probs %>% filter(QUD == "ifp") %>% 
+  mutate(h = NE > E) %>% group_by(stimulus) %>% 
+  summarize(p_h = mean(h)) %>% 
+  mutate(p_h.across = mean(p_h))
+```
+
+Check P(NE) for QUD:if-p vs. QUD:will-q
+
+```{r}
+samples_posterior_probs %>% 
+  filter(stimulus == "B" | stimulus == "D") %>% 
+  dplyr::select(.draw, QUD, stimulus, NE) %>% 
+  group_by(QUD, stimulus) %>% 
+  pivot_wider(names_from = "QUD", values_from = "NE") %>% 
+  mutate(h_NE = willq > ifp) %>% 
+  summarize(h_NE = mean(h_NE))
+
+# P(NE) close to 0? Not for stimulus C!
+samples_posterior_probs %>% 
+  dplyr::select(.draw, stimulus, NE) %>% 
+  group_by(stimulus) %>% 
+  mutate(h_NE = NE <= 0.1) %>% 
+  summarize(h_NE = mean(h_NE))
+```
+
+
+Model summary: only main effect b_nonExhint does not include 0 in 95% interval
+
+```{r}
+summary(ordinal_model)
+mcmc_areas(ordinal_model, regex_pars = "b_")
 ```
 
 ## Bayesian logistic regression model
 
+Prepare Data
+
+```{r}
+data.critical.model = data.critical %>% 
+  dplyr::select(-picPair, -selected_pic, -submission_id, -type, -id) %>% 
+  mutate(picPair = pic_condition, 
+         nb_selected = str_count(response, "_") + 1,
+         response = case_when(nb_selected == 3 ~ "all", T ~ response),
+         response = str_replace(response, "non-exhaustive", "NE"),
+         response = str_replace(response, "exhaustive", "E"), 
+         response = str_replace(response, "contrast", "C"), 
+         response = str_replace(response, "E_NE", "both"), 
+         QUD = as.factor(QUD)) %>% 
+  separate(col = pic_condition, into = c("exh", "nonExh"), sep="-") %>% 
+  mutate(exh = case_when(exh == "w/oDistractor" ~ "woD", 
+                         exh == "withDistractor" ~ "withD"),
+         exh = factor(exh, levels = c("woD", "withD")), 
+         nonExh = case_when(nonExh == "internal" ~ "int", 
+                            nonExh == "external" ~ "ext"),
+         nonExh = factor(nonExh, levels = c("int", "ext")),
+         response = factor(response, levels = c("both", "E", "NE")))
+```
+
+
 ```{r, results='hide'}
-model_path <- here(target_dir, "brms-model-QUD-exh-nonExh.rds")
+model_path <- here(target_dir, "logistic-regression-brms-model.rds")
 
 if(file.exists(model_path)) {
   model <- readRDS(model_path)
@@ -649,12 +770,28 @@ if(file.exists(model_path)) {
 model <-
   brm(data = data.critical.model,
       family = categorical(link="logit"),
-      response ~ 1 + QUD * exh * nonExh + (1 + QUD * exh * nonExh| prolific_id),
-      chains = 4, cores = 4, iter = 4000, control = list(adapt_delta = 0.9))
+      response ~ 1 + QUD * exh + exh * nonExh + (1 + QUD + exh + nonExh| prolific_id),
+      chains = 4, cores = 4, iter = 6000, control = list(adapt_delta = 0.9))
   saveRDS(model, file=model_path)
 }
+model.by_stimulus <-
+  brm(data = data.critical.model,
+      family = categorical(link="logit"),
+      response ~ 1 + QUD * stimulus + (1 + QUD + stimulus| prolific_id),
+      chains = 4, cores = 4, iter = 4000, control = list(adapt_delta = 0.9))
+  saveRDS(model, file=model_path)
+
 model_params <- fixef(model)[, 'Estimate']
 pp_check(model)
+pp_check(model, type = 'hist')
+
+yrep = posterior_predict(model)
+y = data.critical.model %>% dplyr::select(prolific_id, response, QUD) %>% 
+  mutate(response_int = case_when(response == "both" ~ 1,
+                                  response == "E" ~ 2, 
+                                  T ~ 3), 
+         response_int = as.integer(response_int))
+ppc_bars_grouped(y = y$response_int, yrep = yrep, group = y$QUD)
 ```
 
 
@@ -695,28 +832,28 @@ get_linear_predictors = function(predicted_cat, params) {
     prediction = predicted_cat,
     # stimulus A:
     ifp_woD_int = pars[[paste(mu, '_Intercept', sep='')]],
-    willq_woD_int = ifp_woD_int + pars[[paste(mu, '_QUDwillq', sep='')]],
+    willq_woD_int = ifp_woD_int + pars[[paste(mu, '_QUDwillMq', sep='')]],
     # stimulus B:
     ifp_woD_ext = ifp_woD_int + pars[[paste(mu, '_nonExhext', sep='')]],
     willq_woD_ext = ifp_woD_int + pars[[paste(mu, '_nonExhext', sep='')]] + 
-      pars[[paste(mu, '_QUDwillq', sep='')]] + 
-      pars[[paste(mu, '_QUDwillq:nonExhext', sep='')]],
+      pars[[paste(mu, '_QUDwillMq', sep='')]],  #+ 
+      # pars[[paste(mu, '_QUDwillMq:nonExhext', sep='')]],
     # stimulus C:
     ifp_withD_int = ifp_woD_int + pars[[paste(mu, '_exhwithD', sep='')]],
     willq_withD_int = ifp_woD_int + pars[[paste(mu, '_exhwithD', sep='')]] +
-      pars[[paste(mu, '_QUDwillq', sep='')]] +
-      pars[[paste(mu, '_QUDwillq:exhwithD', sep='')]],
+      pars[[paste(mu, '_QUDwillMq', sep='')]] +
+      pars[[paste(mu, '_QUDwillMq:exhwithD', sep='')]],
     # stimulus D: 
     ifp_withD_ext = ifp_woD_int + pars[[paste(mu, '_exhwithD', sep='')]] + 
       pars[[paste(mu, '_nonExhext', sep='')]] + 
       pars[[paste(mu, '_exhwithD:nonExhext', sep='')]],
     willq_withD_ext = ifp_woD_int + pars[[paste(mu, '_exhwithD', sep='')]] + 
       pars[[paste(mu, '_nonExhext', sep='')]] + 
-      pars[[paste(mu, '_QUDwillq', sep='')]] + 
-      pars[[paste(mu, '_exhwithD:nonExhext', sep='')]]+
-      pars[[paste(mu, '_QUDwillq:exhwithD', sep='')]] +
-      pars[[paste(mu, '_QUDwillq:nonExhext', sep='')]] +
-      pars[[paste(mu, '_QUDwillq:exhwithD:nonExhext', sep='')]]
+      pars[[paste(mu, '_QUDwillMq', sep='')]] + 
+      pars[[paste(mu, '_exhwithD:nonExhext', sep='')]] +
+      pars[[paste(mu, '_QUDwillMq:exhwithD', sep='')]] #+
+      # pars[[paste(mu, '_QUDwillMq:nonExhext', sep='')]] +
+      # pars[[paste(mu, '_QUDwillMq:exhwithD:nonExhext', sep='')]]
   )
   return(df)
 }
@@ -749,6 +886,15 @@ plot(p, facet_args = c(nrow = 2, ncol=2, labeller =
 cols = c("cats__", "QUD", "exh", "nonExh", "estimate__", "se__", "lower__", "upper__")
 predicted_vals = p[["QUD:cats__"]][, cols] %>% tibble()
 predicted_vals
+
+observed_vals = data.critical.model %>% group_by(stimulus, QUD, response) %>%
+  dplyr::count() %>% group_by(stimulus, QUD) %>% 
+  mutate(N=sum(n), observed=n/N) %>% rename(cats__ = response)
+
+left_join(predicted_vals %>% rename(exhaustive = exh, non_exhaustive = nonExh) %>% 
+            map_conditions_to_stimuli(), 
+          observed_vals %>% dplyr::select(stimulus, QUD, cats__, observed)) %>% 
+  dplyr::select(estimate__, observed, lower__, upper__, stimulus, QUD)
 ```
 
 Test hypotheses
@@ -770,7 +916,7 @@ posterior_draws_probs = function(df) {
 }
 
 rf = posterior_draws %>% rowwise()
-fn <- paste(target_dir, "posterior-samples-probabilities.rds", 
+fn <- paste(target_dir, "logistic-model-posterior-samples-probabilities.rds", 
             sep=.Platform$file.sep)
 if(file.exists(fn)) { posterior_ps = readRDS(fn)
 } else{
@@ -781,27 +927,32 @@ if(file.exists(fn)) { posterior_ps = readRDS(fn)
 
 posterior_ps %>% summarize(se=sd(p), p=mean(p))
 posterior_samples = posterior_ps %>%
-  pivot_wider(names_from = "prediction", values_from = "p")
+  pivot_wider(names_from = "prediction", values_from = "p") %>% 
+  rename(exhaustive = exh, non_exhaustive = nonExh) %>% 
+  map_conditions_to_stimuli() %>% group_by(QUD, stimulus)
 ```
 
 ### Main hypotheses H1.1 & H1.2
 
 ```{r}
 # H1.1 (selection: exhaustive)
-h1_exh = posterior_samples %>% dplyr::select(QUD, exh, nonExh, draw, E) %>% 
-  pivot_wider(names_from = "QUD", values_from = "E") %>% filter(!is.na(willq)) 
+h1_exh = posterior_samples %>% dplyr::select(QUD, stimulus, draw, E) %>% 
+  pivot_wider(names_from = "QUD", values_from = "E") %>% filter(!is.na(willq))
 # for each stimulus
-h1_exh %>% summarize(p_hypothesis = mean(willq > ifp))
+h1_exh %>% summarize(p_hypothesis_E = mean(willq > ifp), .groups = "drop_last")
 # overall
-h1_exh %>% ungroup() %>% summarize(p_hypothesis = mean(willq > ifp))
+h1_exh %>% ungroup() %>% filter(stimulus == "B" | stimulus == "D") %>% 
+  summarize(p_hypothesis_E = mean(willq > ifp), .groups = "drop_last")
 
 # H1.2 (selection: both)
-h1_both = posterior_samples %>% dplyr::select(QUD, exh, nonExh, draw, both) %>% 
+h1_both = posterior_samples %>% dplyr::select(QUD, stimulus, draw, both) %>% 
   pivot_wider(names_from = "QUD", values_from = "both") %>% filter(!is.na(willq))
+
 # for each stimulus
-h1_both %>% summarize(p_hypothesis = mean(ifp > willq))
+h1_both %>% summarize(p_hypothesis_both = mean(ifp > willq), .groups = "drop_last")
 # overall
-h1_both %>% ungroup() %>% summarize(p_hypothesis = mean(ifp > willq))
+h1_both %>% ungroup() %>% filter(stimulus == "B" | stimulus == "D") %>% 
+  summarize(p_hypothesis_both = mean(ifp > willq), .groups = "drop_last")
 ```
 
 ### Exploratory hypotheses H2 + H3
@@ -813,23 +964,25 @@ H3: P(both | QUD=if-p) > P(exh | QUD=if-p)
 ```{r}
 # H2 QUD: will-q
 h2 = posterior_samples %>% filter(QUD == "willq")
-h2 %>% summarize(p_h2 = mean(E > both)) # for each stimulus                 
-h2 %>% ungroup() %>% summarize(p_h2 = mean(E > both)) # across stimuli 
+# for each stimulus                 
+h2 %>% summarize(p_willq = mean(E > both), .groups = "drop_last") 
+# across stimuli 
+h2 %>% ungroup() %>% summarize(p_willq = mean(E > both), .groups = "drop_last") 
 
 # H3 QUD: if-p
 h3 = posterior_samples %>% filter(QUD == "ifp") 
-h3 %>% summarize(p_h3 = mean(both >= E)) # for each stimulus
-h3 %>% ungroup() %>% summarize(p_h3 = mean(both > E)) # across stimuli
+# for each stimulus
+h3 %>% summarize(p_ifp = mean(both >= E), .groups = "drop_last") 
+# across stimuli
+h3 %>% ungroup() %>% summarize(p_ifp = mean(both > E), .groups = "drop_last")
 ```
 
 Sanity check: P(nonExh) = 0
 
 ```{r}
 df.exploratory <- posterior_ps %>% 
-  mutate(stimulus = case_when(exh == "woD" & nonExh == "int" ~ "A", 
-                              exh == "woD" & nonExh == "ext" ~ "B",
-                              exh == "withD" & nonExh == "int" ~ "C",
-                              exh == "withD" & nonExh == "ext" ~ "D")) 
+  rename(exhaustive = exh, non_exhaustive = nonExh) %>% 
+  map_conditions_to_stimuli()
 
 df.exploratory %>% 
   ggplot(aes(x=p, color = stimulus)) + geom_density() + 
@@ -841,10 +994,12 @@ df.exploratory.ne = df.exploratory %>% filter(prediction == "NE") %>%
   
 # stimuli separately
 df.exploratory.ne %>% group_by(QUD, stimulus) %>% 
-  summarize(p_hypothesis=mean(is_zero)) %>% arrange(desc(p_hypothesis))
+  summarize(p_hypothesis_rope_ne0=mean(is_zero), .groups = "drop_last") %>%
+  arrange(desc(p_hypothesis_rope_ne0))
 
 # across stimuli
-df.exploratory.ne %>% ungroup() %>% summarize(p_hypothesis=mean(is_zero))
+df.exploratory.ne %>% ungroup() %>% 
+  summarize(p_hypothesis_rope_ne0=mean(is_zero), .groups = "drop_last")
 ```
 
 
