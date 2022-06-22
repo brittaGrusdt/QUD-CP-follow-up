@@ -1,3 +1,4 @@
+library(bayesplot)
 library(boot)
 library(brms)
 library(here)
@@ -68,9 +69,9 @@ ordinal_model <- brm(data = df.ordinal,
                      family = cumulative("probit"),
                      formula =  response ~ 1 + QUD * exh + exh * nonExh + 
                        (1 + exh + nonExh + QUD | prolific_id),
-                     chains = 4, cores = 4, iter = 4000, prior = priors,
+                     chains = 4, cores = 4, iter = 8000, prior = priors,
                      control = list(adapt_delta = 0.9))
-
+write_rds(ordinal_model, "statistical-ordinal-brms-model.rds")
 # posterior predictive checks
 yrep = posterior_predict(ordinal_model)
 ppc_bars_grouped(y = df.ordinal$response_int, yrep = yrep, group = df.ordinal$QUD)
@@ -161,10 +162,14 @@ df.main_hypothesis %>% summarize(p = mean(hypothesis)) %>%
 # Exploratory analysis ----------------------------------------------------
 # H2: P(E | QUD=willq) > P(both | QUD=willq)
 samples_posterior_probs %>% filter(QUD == "willq") %>% 
-  mutate(h2 = E > both) %>% summarize(p_h2 = mean(h2))
+  mutate(h2 = E > both) %>% group_by(stimulus) %>% 
+  summarize(p_h2 = mean(h2)) %>% 
+  mutate(p_h2.across = mean(p_h2))
 
 # H3: P(both | QUD=ifp) > P(E | QUD=ifp)
 samples_posterior_probs %>% filter(QUD == "ifp") %>% 
-  mutate(h3 = both > E) %>% summarize(p_h3 = mean(h3))
+  mutate(h3 = both > E) %>% group_by(stimulus) %>% 
+  summarize(p_h3 = mean(h3)) %>% 
+  mutate(p_h3.across = mean(p_h3))
 
 
