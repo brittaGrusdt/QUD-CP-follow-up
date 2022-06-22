@@ -125,21 +125,8 @@ out.control = data %>%
 out.single_control.summary = out.control %>%
   filter(prolific_id %in% out.single_cause_control) %>% 
   filter(str_detect(response, "contrast")) %>% 
+  group_by(prolific_id) %>% 
   dplyr::count(name = "n_control") %>% arrange(desc(n_control))
 
 out.single_control.summary %>% group_by(n_control) %>% 
   dplyr::count(name = "n_participants")
-
-ids_out.single_control_once <- out.control.summary %>% filter(n_control == 1) %>% 
-  pull(prolific_id) %>% unique()
-
-# save with those included that selected the control scene exactly once in test phase
-# and only failed this criteria
-data.raw <- read.csv(here("results", "results_82_CommunicationBlocks2_BG.csv")) %>% 
-  as_tibble() %>% group_by(prolific_id)
-
-data_cleaned_less = data.raw %>% 
-  filter(prolific_id %in% ids_out.single_control_once | !prolific_id %in% ids_out) %>% 
-  group_by(prolific_id)
-
-write_csv(data_cleaned_less, here("results", "data_cleaned_only_single_control_ok.csv"))
