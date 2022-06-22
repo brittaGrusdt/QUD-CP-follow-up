@@ -55,6 +55,7 @@ out.control = bind_rows(out.control_trial10, out.control_not_trial10)
 ids_out.control = c(ids_out.control_not_trial10, ids_out.control_trial10) %>% 
   unique()
 
+
 # 3. Participants' responses to questions shown in the end
 out.check_ann = data %>% dplyr::select(prolific_id, check_ann) %>% distinct() 
 ids_out.check_ann = out.check_ann %>% 
@@ -132,57 +133,5 @@ ratio = round(n_in/(n_in + n_out), 2) * 100
 message(paste(ratio, "% included.", sep=""))
 message(paste(n_in, " participants included.", sep=""))
 
-# Information about excluded data -----------------------------------------
-df.out %>% group_by(cause) %>% summarize(n = n(), .groups = "drop_last") 
-
-all_control = left_join(tibble(id = data$prolific_id) %>% distinct(), 
-                        tibble(id = ids_out.control, control = TRUE))
-control_qud = left_join(all_control, tibble(id = ids_out.check_ann, qud = TRUE))
-control_qud_attention = left_join(control_qud, 
-                                  tibble(id = ids_out.attention, attention = T))
-control_qud_attention_rt = left_join(control_qud_attention,
-                                     tibble(id = ids_out.rts, rt = T))
-df.out.all = left_join(control_qud_attention_rt,
-                       tibble(id=ids_out.comments, comment = T)) %>% 
-  replace_na(list(control = F, qud = F, attention = F, rt = F, comment = F)) %>% 
-  unite("control_qud_attention_rt_comment", 
-        control, qud, attention, rt, comment) %>% 
-  group_by(control_qud_attention_rt_comment) %>% 
-  filter(str_detect(control_qud_attention_rt_comment, "TRUE")) %>% 
-  dplyr::count() %>% 
-  separate("control_qud_attention_rt_comment", 
-           into = c("control", "qud", "attention", "rt", "comment"), sep = "_") %>% 
-  arrange(desc(n))
-df.out.all
-
-out.by_id = df.out %>% group_by(id) %>% summarize(n=n()) %>% arrange(desc(n))
-out.by_id %>% ggplot(aes(x=n)) + geom_bar(stat="count") + 
-  labs(x = "# criteria failed in", y = "# participants", title = "excluded data")
-
-out.several = out.by_id %>% filter(n > 1) %>% pull(id) %>% unique()
-out.one_cause = out.by_id %>% filter(n == 1) %>% pull(id) %>% unique()
-
-ratio = length(out.several) / length(ids_out)
-message(paste("from those that were excluded, ", round(ratio*100, 2),
-              "% were excluded because failed in multiple criteria", sep=""))
-
-
-# reasons for those who are excluded just because of one criteria
-ids_out.one_cause = out.by_id %>% filter(n==1) %>% pull(id) 
-df.out %>% filter(id %in% out.one_cause) %>% 
-  group_by(cause) %>% summarize(n=n())
-
-# 1. single cause is QUD
-out.single_cause_qud = df.out %>% 
-  filter(id %in% out.one_cause & cause == "qud-not-processed") %>% pull(id)
-out.check_ann %>% filter(prolific_id %in% out.single_cause_qud) %>% 
-  group_by(check_ann) %>% dplyr::count() %>% arrange(desc(n))
-
-# 2. single cause is selection of control scene
-out.single_cause_control = df.out %>% 
-  filter(id %in% out.one_cause & cause == "control-scene") %>% pull(id)
-out.control %>% filter(prolific_id %in% out.single_cause_control) %>% 
-  dplyr::select(prolific_id, response, id, selected_pic) %>% 
-  group_by(id) %>% dplyr::count() %>% arrange(desc(n))
 
 
