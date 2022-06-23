@@ -5,6 +5,7 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(bayesplot)
 library(boot)
 library(brms)
 library(here)
@@ -15,7 +16,6 @@ library(tidyverse)
 source("utils.R")
 
 theme_set(theme_minimal(base_size=12) + theme(legend.position = "top"))
-# target_dir = here("results", "pretests")
 target_dir = here("results")
 
 plot_dir = file.path(target_dir, "figs")
@@ -37,14 +37,36 @@ data.practice = data %>% filter(str_detect(block, "practice"))
 
 ## Participants' responses to questions shown in the end
 
+(Multiple selections possible)
+During the experiment, Ann's question was ...
+
+- always the same (**same**)
+- sometimes about what happened if one block fell (**ifp**)
+- sometimes about the yellow block (**yellow**)
+- sometimes about whether one block would fall (**willq**)
+- sometimes about several blocks at a time (**several**)
+- I only read Bob's answer (**ignored**)
+
 ```{r}
 data %>% dplyr::select(prolific_id, check_ann) %>%
   distinct() %>% group_by(check_ann) %>% dplyr::count() %>% arrange(desc(n))
+```
+
+Most of the time I selected a **single picture** ...
+
+- even though another picture wasn't unlikely either
+- only when I was very confident about my decision
+
+```{r}
 data %>% dplyr::select(prolific_id, check_behavior) %>%
   distinct() %>% group_by(check_behavior) %>% dplyr::count()
 ```
 
 ## Trials where a pragmatic and a literal selection is possible
+
+For instance in one filler trial, Bob says: "The green block will NOT fall" and
+in one scene, all other blocks fall (referred to as 'pragmatic'), in another
+scene, some other block do not fall either (referred to as 'literal').
 
 ```{r}
 trials_lit_prag = c("trial7", "trial8", "trial19", "trial20", "trial21", "trial24")
@@ -90,7 +112,7 @@ data.pragmatic_score %>% summarize(abs = mean(score), rel = mean(relative_score)
 
 (should be an empty dataframe) 
 Note that in trial10 (filler) two scenes called 'contrast', just pic1 is 
-the control scene participants should not select (in other contrast-scene, 
+the control scene participants should not select (in other 'contrast'-scene, 
 utterance is indeed literally true)
 
 ```{r}
@@ -147,7 +169,7 @@ data.meta %>% ggplot(aes(x="time", y=timeSpent)) +
 
 ## Participants' game scores from test phase
 
-Horizontal lines are maximal scores that can be reached in respective trials
+Feedback given in practice trials, in other trials particapants do not see their scores. 
 
 ```{r}
 data.test_scores = data %>% filter(type != "training") %>% 
@@ -332,7 +354,7 @@ ggsave(here(plot_dir, "selection-rates-barplot.pdf"), p, width=7, height=4)
 
 w_dodge = 0.25
 p = data.critical.rate.by_stimulus_with_cis %>% 
-  filter(stimulus %in% c("B", "D")) %>% 
+  # filter(stimulus %in% c("B", "D")) %>% 
   ggplot(aes(y=ratio, x=QUD, color=response, group=response)) + 
   geom_point(position = position_dodge(width=w_dodge)) +
   geom_line(position = position_dodge(width = w_dodge)) +
@@ -344,6 +366,17 @@ p
 data.critical.rate.by_stimulus_with_cis %>% 
   filter(stimulus %in% c("B", "D"))
 ggsave(here(plot_dir, "selection-rates.pdf"), p, width=5, height=4)
+
+
+data.critical.rate.by_stimulus_with_cis %>% 
+  # filter(stimulus %in% c("B", "D")) %>% 
+  ggplot(aes(y=ratio, x=response, color=QUD, group=QUD)) + 
+  geom_point(position = position_dodge(width=w_dodge)) +
+  geom_line(position = position_dodge(width = w_dodge)) +
+  geom_errorbar(aes(ymin=ci.low, ymax=ci.up), width=0.1, 
+                position = position_dodge(width=w_dodge)) +
+  facet_wrap(~stimulus, scales = "free") + 
+  labs(y="selection rate", x = "QUD")
 
 ```
 
@@ -442,23 +475,6 @@ df.ignored_qud %>% group_by(selection, nb_stimuli, switch_answer) %>%
   dplyr::count() %>% arrange(switch_answer, n) %>% 
   ungroup() %>% mutate(N=sum(n))
 # only 10% of participants switch answers!
-
-# plot QUD-score from test trials against pragmatic score from practice trials
-# pair with participants pragmatic scores
-scores = left_join(df.qud_scores %>% rename(score_qud = score.total) %>% 
-                     mutate(score_qud = as.integer(score_qud)), 
-                   data.pragmatic_score %>% 
-                     dplyr::select(prolific_id, relative_score) %>% 
-                     rename(score_pragmatic = relative_score), 
-          by="prolific_id")
-
-scores %>% 
-  mutate(prolific_id = as.factor(prolific_id), 
-         score_qud = as.factor(score_qud)) %>% 
-  ggplot(aes(x=score_qud, y=score_pragmatic)) +
-  geom_boxplot() +
-  geom_jitter(width=0.2) + theme(legend.position = "none")
-
 ```
 
 ## Plot empirical selection rates
@@ -530,7 +546,7 @@ ggsave(file.path(plot_dir, "empirical-responses-rates-fig3.pdf"), p2,
 ###  Main analysis 
 
 ```{r}
-ordinal_model <- readRDS(here("statistical-ordinal-brms-model.rds"))
+ordinal_model <- readRDS(file.path(target_dir,"statistical-ordinal-brms-model.rds"))
 df.ordinal <- ordinal_model$data %>% as_tibble() %>% 
     mutate(response = factor(response, levels=c("NE", "both", "E"), ordered=T),
            response_int = as.integer(response)) %>% 
@@ -546,8 +562,7 @@ pp_check(ordinal_model, type= 'stat', stat = 'mean', nsamples = 100)
 
 conds_stimuli <- make_conditions(df.ordinal, c("exh", "nonExh"))
 effects <- conditional_effects(ordinal_model, c("QUD"), categorical=T, 
-                               conditions=conds_stimuli, robust=T, re_formula=NA, 
-                               metho)
+                               conditions=conds_stimuli, robust=T, re_formula=NA)
 effects 
 
 cond_effects = effects$`QUD:cats__` %>% as_tibble() %>% 
@@ -565,7 +580,6 @@ cond_effects = effects$`QUD:cats__` %>% as_tibble() %>%
 hypothesis(ordinal_model, "QUDwillMq > 0") # stimulus D
 hypothesis(ordinal_model,  "QUDwillMq + exhwoD + QUDwillMq:exhwoD > exhwoD") # B
 ```
-
 
 <!-- Plot predictions with observed data -->
 
@@ -733,273 +747,6 @@ Model summary: only main effect b_nonExhint does not include 0 in 95% interval
 ```{r}
 summary(ordinal_model)
 mcmc_areas(ordinal_model, regex_pars = "b_")
-```
-
-## Bayesian logistic regression model
-
-Prepare Data
-
-```{r}
-data.critical.model = data.critical %>% 
-  dplyr::select(-picPair, -selected_pic, -submission_id, -type, -id) %>% 
-  mutate(picPair = pic_condition, 
-         nb_selected = str_count(response, "_") + 1,
-         response = case_when(nb_selected == 3 ~ "all", T ~ response),
-         response = str_replace(response, "non-exhaustive", "NE"),
-         response = str_replace(response, "exhaustive", "E"), 
-         response = str_replace(response, "contrast", "C"), 
-         response = str_replace(response, "E_NE", "both"), 
-         QUD = as.factor(QUD)) %>% 
-  separate(col = pic_condition, into = c("exh", "nonExh"), sep="-") %>% 
-  mutate(exh = case_when(exh == "w/oDistractor" ~ "woD", 
-                         exh == "withDistractor" ~ "withD"),
-         exh = factor(exh, levels = c("woD", "withD")), 
-         nonExh = case_when(nonExh == "internal" ~ "int", 
-                            nonExh == "external" ~ "ext"),
-         nonExh = factor(nonExh, levels = c("int", "ext")),
-         response = factor(response, levels = c("both", "E", "NE")))
-```
-
-
-```{r, results='hide'}
-model_path <- here(target_dir, "logistic-regression-brms-model.rds")
-
-if(file.exists(model_path)) {
-  model <- readRDS(model_path)
-} else {
-model <-
-  brm(data = data.critical.model,
-      family = categorical(link="logit"),
-      response ~ 1 + QUD * exh + exh * nonExh + (1 + QUD + exh + nonExh| prolific_id),
-      chains = 4, cores = 4, iter = 6000, control = list(adapt_delta = 0.9))
-  saveRDS(model, file=model_path)
-}
-model.by_stimulus <-
-  brm(data = data.critical.model,
-      family = categorical(link="logit"),
-      response ~ 1 + QUD * stimulus + (1 + QUD + stimulus| prolific_id),
-      chains = 4, cores = 4, iter = 4000, control = list(adapt_delta = 0.9))
-  saveRDS(model, file=model_path)
-
-model_params <- fixef(model)[, 'Estimate']
-pp_check(model)
-pp_check(model, type = 'hist')
-
-yrep = posterior_predict(model)
-y = data.critical.model %>% dplyr::select(prolific_id, response, QUD) %>% 
-  mutate(response_int = case_when(response == "both" ~ 1,
-                                  response == "E" ~ 2, 
-                                  T ~ 3), 
-         response_int = as.integer(response_int))
-ppc_bars_grouped(y = y$response_int, yrep = yrep, group = y$QUD)
-```
-
-
-```{r}
-# function that transforms linear predictors on odds-scale into probabilities
-transform_to_probs = function(predictors_grouped, ref_cat = "both", simplify = F){
-  df.out <- predictors_grouped %>% 
-    mutate(denominator = sum(exp(value)) + 1,
-           p = exp(value)/denominator,
-           #p_ref_cat = 1-sum(p), # is the same as
-           p_ref = 1/denominator, # this
-           ref_cat = ref_cat) %>% 
-    filter(!is.infinite(denominator)) # QUD:willq not used for 2 stimuli
-  
-  if(simplify){
-    df = df.out %>% dplyr::select(-value, -denominator)
-    df.ref_cat <- df %>% dplyr::select(-p, -prediction) %>% 
-      rename(p=p_ref, prediction = ref_cat) %>% distinct()
-    df.out = bind_rows(df %>% dplyr::select(-p_ref, -ref_cat),
-                       df.ref_cat)
-  }
-  return(df.out)
-}
-```
-
-- reference output category (Intercept): both
-- reference level for predictor QUD: if-p
-- reference level for predictor exhaustive: woD
-- reference level for predictor non-exhaustive: int (internal)
-
-Some predicted probabilities
-
-```{r}
-get_linear_predictors = function(predicted_cat, params) {
-  mu = paste('mu', predicted_cat, sep='')
-  pars = params[startsWith(names(params), mu)] 
-  df = tibble(
-    prediction = predicted_cat,
-    # stimulus A:
-    ifp_woD_int = pars[[paste(mu, '_Intercept', sep='')]],
-    willq_woD_int = ifp_woD_int + pars[[paste(mu, '_QUDwillMq', sep='')]],
-    # stimulus B:
-    ifp_woD_ext = ifp_woD_int + pars[[paste(mu, '_nonExhext', sep='')]],
-    willq_woD_ext = ifp_woD_int + pars[[paste(mu, '_nonExhext', sep='')]] + 
-      pars[[paste(mu, '_QUDwillMq', sep='')]],  #+ 
-      # pars[[paste(mu, '_QUDwillMq:nonExhext', sep='')]],
-    # stimulus C:
-    ifp_withD_int = ifp_woD_int + pars[[paste(mu, '_exhwithD', sep='')]],
-    willq_withD_int = ifp_woD_int + pars[[paste(mu, '_exhwithD', sep='')]] +
-      pars[[paste(mu, '_QUDwillMq', sep='')]] +
-      pars[[paste(mu, '_QUDwillMq:exhwithD', sep='')]],
-    # stimulus D: 
-    ifp_withD_ext = ifp_woD_int + pars[[paste(mu, '_exhwithD', sep='')]] + 
-      pars[[paste(mu, '_nonExhext', sep='')]] + 
-      pars[[paste(mu, '_exhwithD:nonExhext', sep='')]],
-    willq_withD_ext = ifp_woD_int + pars[[paste(mu, '_exhwithD', sep='')]] + 
-      pars[[paste(mu, '_nonExhext', sep='')]] + 
-      pars[[paste(mu, '_QUDwillMq', sep='')]] + 
-      pars[[paste(mu, '_exhwithD:nonExhext', sep='')]] +
-      pars[[paste(mu, '_QUDwillMq:exhwithD', sep='')]] #+
-      # pars[[paste(mu, '_QUDwillMq:nonExhext', sep='')]] +
-      # pars[[paste(mu, '_QUDwillMq:exhwithD:nonExhext', sep='')]]
-  )
-  return(df)
-}
-
-# linear predictors
-predictors_E = get_linear_predictors("E", model_params)
-predictors_NE = get_linear_predictors("NE", model_params)
-
-# transformed to probabilities
-predictors = bind_rows(predictors_E, predictors_NE)
-df <- predictors %>% pivot_longer(cols=c(-prediction), names_to = "param") %>% 
-    separate(param, into=c("QUD", "exh", "non_exh")) %>% group_by(QUD, exh, non_exh)
-predicted_p = transform_to_probs(df, simplify = T)
-predicted_p %>% arrange(QUD, exh, non_exh, prediction)
-```
-
-Plot conditional effects on probability scale: 
-
-```{r}
-conds <- make_conditions(data.critical.model, c("exh", "nonExh"))
-p = conditional_effects(
-  model, effects = c("QUD"), conditions = conds, categorical = T, 
-  re_formula = NA, method = "fitted", robust = F
-)
-plot(p, facet_args = c(nrow = 2, ncol=2, labeller =
-                         as_labeller(c(`exh = woD & nonExh = int` = "stimulus A", 
-                                       `exh = woD & nonExh = ext` = "stimulus B",
-                                       `exh = withD & nonExh = int` = "stimulus C",
-                                       `exh = withD & nonExh = ext` = "stimulus D"))))
-cols = c("cats__", "QUD", "exh", "nonExh", "estimate__", "se__", "lower__", "upper__")
-predicted_vals = p[["QUD:cats__"]][, cols] %>% tibble()
-predicted_vals
-
-observed_vals = data.critical.model %>% group_by(stimulus, QUD, response) %>%
-  dplyr::count() %>% group_by(stimulus, QUD) %>% 
-  mutate(N=sum(n), observed=n/N) %>% rename(cats__ = response)
-
-left_join(predicted_vals %>% rename(exhaustive = exh, non_exhaustive = nonExh) %>% 
-            map_conditions_to_stimuli(), 
-          observed_vals %>% dplyr::select(stimulus, QUD, cats__, observed)) %>% 
-  dplyr::select(estimate__, observed, lower__, upper__, stimulus, QUD)
-```
-
-Test hypotheses
-
-```{r}
-posterior_draws = tidy_draws(model)
-posterior_draws_probs = function(df) {
-  samples = df %>% as_tibble() %>% dplyr::select(starts_with("b_mu")) %>% 
-    pivot_longer(cols = everything()) %>%
-    mutate(name = str_replace(name, "b_", "")) %>% deframe()
- 
-  predictors = bind_rows(get_linear_predictors("E", samples),
-                         get_linear_predictors("NE", samples)) %>% 
-    pivot_longer(cols=c(-prediction), names_to = "param") %>% 
-    separate(param, into=c("QUD", "exh", "nonExh"), sep="_") %>% 
-    group_by(QUD, exh, nonExh)
-
-  transform_to_probs(predictors, simplify=T) %>% add_column(draw = df$.draw)
-}
-
-rf = posterior_draws %>% rowwise()
-fn <- paste(target_dir, "logistic-model-posterior-samples-probabilities.rds", 
-            sep=.Platform$file.sep)
-if(file.exists(fn)) { posterior_ps = readRDS(fn)
-} else{
-  posterior_ps = rf %>% do(p=posterior_draws_probs(.)) %>% 
-    unnest(cols = c(p)) %>% group_by(QUD,exh, nonExh, prediction)
-  saveRDS(posterior_ps, file = fn)
-}
-
-posterior_ps %>% summarize(se=sd(p), p=mean(p))
-posterior_samples = posterior_ps %>%
-  pivot_wider(names_from = "prediction", values_from = "p") %>% 
-  rename(exhaustive = exh, non_exhaustive = nonExh) %>% 
-  map_conditions_to_stimuli() %>% group_by(QUD, stimulus)
-```
-
-### Main hypotheses H1.1 & H1.2
-
-```{r}
-# H1.1 (selection: exhaustive)
-h1_exh = posterior_samples %>% dplyr::select(QUD, stimulus, draw, E) %>% 
-  pivot_wider(names_from = "QUD", values_from = "E") %>% filter(!is.na(willq))
-# for each stimulus
-h1_exh %>% summarize(p_hypothesis_E = mean(willq > ifp), .groups = "drop_last")
-# overall
-h1_exh %>% ungroup() %>% filter(stimulus == "B" | stimulus == "D") %>% 
-  summarize(p_hypothesis_E = mean(willq > ifp), .groups = "drop_last")
-
-# H1.2 (selection: both)
-h1_both = posterior_samples %>% dplyr::select(QUD, stimulus, draw, both) %>% 
-  pivot_wider(names_from = "QUD", values_from = "both") %>% filter(!is.na(willq))
-
-# for each stimulus
-h1_both %>% summarize(p_hypothesis_both = mean(ifp > willq), .groups = "drop_last")
-# overall
-h1_both %>% ungroup() %>% filter(stimulus == "B" | stimulus == "D") %>% 
-  summarize(p_hypothesis_both = mean(ifp > willq), .groups = "drop_last")
-```
-
-### Exploratory hypotheses H2 + H3
-
-H2: P(exh | QUD=will-q) > P(both | QUD=will-q)
-H3: P(both | QUD=if-p) > P(exh | QUD=if-p)
-
-
-```{r}
-# H2 QUD: will-q
-h2 = posterior_samples %>% filter(QUD == "willq")
-# for each stimulus                 
-h2 %>% summarize(p_willq = mean(E > both), .groups = "drop_last") 
-# across stimuli 
-h2 %>% ungroup() %>% summarize(p_willq = mean(E > both), .groups = "drop_last") 
-
-# H3 QUD: if-p
-h3 = posterior_samples %>% filter(QUD == "ifp") 
-# for each stimulus
-h3 %>% summarize(p_ifp = mean(both >= E), .groups = "drop_last") 
-# across stimuli
-h3 %>% ungroup() %>% summarize(p_ifp = mean(both > E), .groups = "drop_last")
-```
-
-Sanity check: P(nonExh) = 0
-
-```{r}
-df.exploratory <- posterior_ps %>% 
-  rename(exhaustive = exh, non_exhaustive = nonExh) %>% 
-  map_conditions_to_stimuli()
-
-df.exploratory %>% 
-  ggplot(aes(x=p, color = stimulus)) + geom_density() + 
-  facet_wrap(QUD~prediction, scales = "free") +
-  labs(x = "predicted selection probability")
-
-df.exploratory.ne = df.exploratory %>% filter(prediction == "NE") %>% 
-  mutate(is_zero = p <= 0.05) 
-  
-# stimuli separately
-df.exploratory.ne %>% group_by(QUD, stimulus) %>% 
-  summarize(p_hypothesis_rope_ne0=mean(is_zero), .groups = "drop_last") %>%
-  arrange(desc(p_hypothesis_rope_ne0))
-
-# across stimuli
-df.exploratory.ne %>% ungroup() %>% 
-  summarize(p_hypothesis_rope_ne0=mean(is_zero), .groups = "drop_last")
 ```
 
 
