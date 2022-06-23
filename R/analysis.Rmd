@@ -27,12 +27,43 @@ if(!file.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 Data was cleaned (see script R/clean_data.R) according to predefined exclusion criteria
 
 ```{r, message = FALSE, warning = FALSE}
-data = read_csv(here("results", "data_cleaned.csv")) %>% group_by(prolific_id)
-# just excluded participants
-# data = read_csv(here("results", "data_excluded_all.csv")) %>% group_by(prolific_id)
+######## select data #######
+fn_data = "data_cleaned.csv"
+fn_model = "statistical-ordinal-brms-model.rds"
+
+# fn_data = "cleaned_data_not_always_both.csv"
+# fn_model = "statistical-ordinal-brms-model-not-always-two-selected.rds"
+
+data = read_csv(here("results", fn_data)) %>% group_by(prolific_id)
+ordinal_model <- readRDS(here("results", fn_model))
+```
+
+```{r}
+message(paste("model:", fn_model))
+message(paste("data:", fn_data))
 
 data.test = data %>% filter(str_detect(block, "test"))
 data.practice = data %>% filter(str_detect(block, "practice"))
+
+data.critical <- data %>% filter(type == "critical") %>% 
+  dplyr::select(submission_id, prolific_id, id, type, QUD, response, 
+                selected_pic, pic2, pic3, RT) %>% 
+  mutate(pic2=str_replace(pic2, ".png", ""), pic2=str_replace(pic2, "_horiz", ""),
+         pic3 = str_replace(pic3, ".png", ""), pic3=str_replace(pic3, "_horiz", "")) %>% 
+  mutate(picPair=paste(pic2, pic3, sep=" & "),
+         pic_condition = 
+           case_when(picPair == "if2_unn & if2_unu" ~ "D. withDistractor-external", 
+                     picPair == "if1_un & if2_unu" ~ "B. w/oDistractor-external",
+                     picPair == "if1_un & if1_uu" ~ "A. w/oDistractor-internal",
+                     picPair == "if2_unn & if1_uu" ~ "C. withDistractor-internal")) %>% 
+  dplyr::select(-pic2, -pic3) %>%
+  mutate(stimulus = substr(pic_condition, 1, 1),
+         pic_condition = substr(pic_condition, 4, nchar(pic_condition)), 
+         response = case_when(response == "exhaustive_non-exhaustive" ~ "both",
+                              T ~ response),
+         QUD = case_when(QUD == "willq" ~ "will-q",
+                         QUD == "ifp" ~ "if-p", 
+                         T ~ QUD))
 ```
 
 ## Participants' responses to questions shown in the end
@@ -127,7 +158,8 @@ data.test %>%
 data.practice %>%
   ggplot(aes(x=id, fill=response)) + 
   geom_bar(stat="count", position=position_dodge()) +
-  scale_y_continuous(breaks = pretty_breaks())
+  scale_y_continuous(breaks = pretty_breaks()) +
+  guides(fill = guide_legend(nrow = 4))
 ```
 
 ## Trials where we'd expect selection of exhaustive + non-exhaustive
@@ -223,28 +255,6 @@ train.correct.id %>%
 # Critical test trials
 
 Plot critical trials with 95%-bootstrap confidence intervals
-
-```{r, data-critical, echo=FALSE}
-data.critical <- data %>% filter(type == "critical") %>% 
-  dplyr::select(submission_id, prolific_id, id, type, QUD, response, 
-                selected_pic, pic2, pic3, RT) %>% 
-  mutate(pic2=str_replace(pic2, ".png", ""), pic2=str_replace(pic2, "_horiz", ""),
-         pic3 = str_replace(pic3, ".png", ""), pic3=str_replace(pic3, "_horiz", "")) %>% 
-  mutate(picPair=paste(pic2, pic3, sep=" & "),
-         pic_condition = 
-           case_when(picPair == "if2_unn & if2_unu" ~ "D. withDistractor-external", 
-                     picPair == "if1_un & if2_unu" ~ "B. w/oDistractor-external",
-                     picPair == "if1_un & if1_uu" ~ "A. w/oDistractor-internal",
-                     picPair == "if2_unn & if1_uu" ~ "C. withDistractor-internal")) %>% 
-  dplyr::select(-pic2, -pic3) %>%
-  mutate(stimulus = substr(pic_condition, 1, 1),
-         pic_condition = substr(pic_condition, 4, nchar(pic_condition)), 
-         response = case_when(response == "exhaustive_non-exhaustive" ~ "both",
-                              T ~ response),
-         QUD = case_when(QUD == "willq" ~ "will-q",
-                         QUD == "ifp" ~ "if-p", 
-                         T ~ QUD))
-```
 
 Get bootstrap intervals
 
@@ -465,16 +475,14 @@ stimulus D?
 
 ```{r}
 df.ignored_qud = responses.all_quds %>% filter(submission_id %in% ids.score0) %>% 
-  group_by(submission_id, ifp, willq) %>% 
+  group_by(submission_id, ifp) %>% 
   dplyr::count(name="nb_stimuli") %>%
-  arrange(submission_id) %>% 
-  rename(selection = ifp) %>% ungroup() %>% dplyr::select(-willq) %>% 
+  arrange(submission_id) %>% rename(selection = ifp) %>% ungroup() %>%
   mutate(switch_answer = case_when(nb_stimuli == 2 ~ FALSE, TRUE ~ TRUE))
 
-df.ignored_qud %>% group_by(selection, nb_stimuli, switch_answer) %>% 
-  dplyr::count() %>% arrange(switch_answer, n) %>% 
-  ungroup() %>% mutate(N=sum(n))
-# only 10% of participants switch answers!
+df.ignored_qud %>% distinct_at(vars(c(submission_id)), .keep_all = T) %>% 
+  group_by(switch_answer) %>% 
+  dplyr::count() %>% ungroup() %>% mutate(N=sum(n), ratio = n/N)
 ```
 
 ## Plot empirical selection rates
@@ -546,7 +554,6 @@ ggsave(file.path(plot_dir, "empirical-responses-rates-fig3.pdf"), p2,
 ###  Main analysis 
 
 ```{r}
-ordinal_model <- readRDS(file.path(target_dir,"statistical-ordinal-brms-model.rds"))
 df.ordinal <- ordinal_model$data %>% as_tibble() %>% 
     mutate(response = factor(response, levels=c("NE", "both", "E"), ordered=T),
            response_int = as.integer(response)) %>% 
@@ -784,9 +791,11 @@ bootstrap_RTs.CI.question_pic = bootstrap_RTs %>%
   dplyr::select(-mean_RT) %>% distinct()
 
 left_join(critical.RT_means, bootstrap_RTs.CI.question_pic) %>% 
-  ggplot(aes(x=mean_RT, y=pic_condition, fill=QUD)) + 
-  geom_bar(stat="identity", position = position_dodge()) + 
-  geom_errorbar(aes(xmin=ci.low, xmax=ci.up), position = position_dodge())# +
+  separate(pic_condition, into=c("exhaustive", "non_exhaustive"), sep="-") %>% 
+  ggplot(aes(y=mean_RT, x=exhaustive, color=QUD)) + 
+  geom_point(stat="identity", position = position_dodge(width=0.25)) + 
+  geom_errorbar(aes(ymin=ci.low, ymax=ci.up), position = position_dodge(width=0.25)) +
+  facet_wrap(~non_exhaustive, ncol=2)
 ```
 
 ```{r}
