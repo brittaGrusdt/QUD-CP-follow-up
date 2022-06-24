@@ -375,10 +375,10 @@ p = data.critical.rate.by_stimulus_with_cis %>%
 p
 data.critical.rate.by_stimulus_with_cis %>% 
   filter(stimulus %in% c("B", "D"))
-ggsave(here(plot_dir, "selection-rates.pdf"), p, width=5, height=4)
+ggsave(here(plot_dir, "selection-rates-pointplot.pdf"), p, width=5, height=4)
 
 
-data.critical.rate.by_stimulus_with_cis %>% 
+point2 <- data.critical.rate.by_stimulus_with_cis %>% 
   # filter(stimulus %in% c("B", "D")) %>% 
   ggplot(aes(y=ratio, x=response, color=QUD, group=QUD)) + 
   geom_point(position = position_dodge(width=w_dodge)) +
@@ -387,6 +387,9 @@ data.critical.rate.by_stimulus_with_cis %>%
                 position = position_dodge(width=w_dodge)) +
   facet_wrap(~stimulus, scales = "free") + 
   labs(y="selection rate", x = "QUD")
+point2
+ggsave(here(plot_dir, "selection-rates-pointplot2.pdf"), point2, width=6, height=4)
+
 
 ```
 
@@ -541,7 +544,7 @@ p3 <- df %>%
   facet_grid(~ stimulus, scales = "free", labeller = label_both)
 
 p3
-ggsave(file.path(plot_dir, "empirical-responses-rates-fig3.pdf"), p2, 
+ggsave(file.path(plot_dir, "empirical-responses-rates-fig3.pdf"), p3, 
        width=7, height=4)
 
 ```
@@ -748,6 +751,32 @@ samples_posterior_probs %>%
   summarize(h_NE = mean(h_NE))
 ```
 
+Difference between stimulus B and D?
+
+```{r}
+df = samples_posterior_probs %>% filter(stimulus == "B" | stimulus == "D") %>% 
+  dplyr::select(.draw, QUD, stimulus, E, both, NE) %>% 
+  pivot_longer(cols=c(NE, both, E), names_to = "response", values_to = "p") %>% 
+  group_by(QUD, stimulus) 
+
+# Exhaustive if-p
+df %>% filter(QUD == "ifp" & response == "E") %>% 
+  pivot_wider(names_from = "stimulus", values_from = "p") %>% 
+  mutate(h = B > D) %>% summarize(p_h = mean(h))
+# both if-p
+df %>% filter(QUD == "ifp" & response == "both") %>% 
+  pivot_wider(names_from = "stimulus", values_from = "p") %>% 
+  mutate(h = B < D) %>% summarize(p_h = mean(h))
+
+# both will-q
+df %>% filter(QUD == "willq" & response == "both") %>% 
+  pivot_wider(names_from = "stimulus", values_from = "p") %>% 
+  mutate(h = B < D) %>% summarize(p_h = mean(h))
+# Exhaustive will-q
+df %>% filter(QUD == "willq" & response == "E") %>% 
+  pivot_wider(names_from = "stimulus", values_from = "p") %>% 
+  mutate(h = B > D) %>% summarize(p_h = mean(h))
+```
 
 Model summary: only main effect b_nonExhint does not include 0 in 95% interval
 
@@ -790,12 +819,23 @@ bootstrap_RTs = group_map(critical.RT, function(df, df.group){
 bootstrap_RTs.CI.question_pic = bootstrap_RTs %>%
   dplyr::select(-mean_RT) %>% distinct()
 
-left_join(critical.RT_means, bootstrap_RTs.CI.question_pic) %>% 
+df <-left_join(critical.RT_means, bootstrap_RTs.CI.question_pic) %>% 
   separate(pic_condition, into=c("exhaustive", "non_exhaustive"), sep="-") %>% 
-  ggplot(aes(y=mean_RT, x=exhaustive, color=QUD)) + 
+  mutate(exhaustive = case_when(exhaustive == "w/oDistractor" ~ "woD", T ~ "withD"), 
+         non_exhaustive = case_when(non_exhaustive == "internal" ~ "int", T ~ "ext")) %>%
+  map_conditions_to_stimuli()
+  
+p <- df %>% 
+  ggplot(aes(y=mean_RT, x=exhaustive, color=non_exhaustive, shape = QUD)) + 
   geom_point(stat="identity", position = position_dodge(width=0.25)) + 
-  geom_errorbar(aes(ymin=ci.low, ymax=ci.up), position = position_dodge(width=0.25)) +
-  facet_wrap(~non_exhaustive, ncol=2)
+  geom_line(aes(group=interaction(QUD, non_exhaustive)),
+            position = position_dodge(width=0.25)) +
+  geom_text(aes(label = stimulus), vjust=0.9) + 
+  geom_errorbar(aes(ymin=ci.low, ymax=ci.up), position = position_dodge(width=0.25))+
+  facet_wrap(~QUD)
+p
+ggsave(file.path(plot_dir, "reaction-times-233.pdf"), p, width=7, height=4)
+
 ```
 
 ```{r}
@@ -809,30 +849,5 @@ p.rt + facet_wrap(~QUD)
 ggsave(file.path(plot_dir, "empiric-rts.pdf"), p.rt, width=7, height=4)
 ```
 
-```{r}
-df.rt = critical.RT %>% 
-  dplyr::select(submission_id, QUD, RT, pic_condition, stimulus) %>% 
-  #filter(!submission_id %in% ids.scores) %>% 
-  separate(col = pic_condition, into = c("exh_situation", "nonExh_situation"), sep="-") %>% 
-  mutate(exh_situation = factor(exh_situation, 
-                                levels = c("withDistractor", "w/oDistractor")))
-
-df.rt_means = df.rt %>% 
-  group_by(QUD, exh_situation, nonExh_situation, stimulus) %>% 
-  summarize(mean_rt = mean(RT), .groups = "drop_last")
-
-p <- df.rt_means %>% ggplot(aes(x=exh_situation, y=mean_rt, color=nonExh_situation)) +
-  geom_point(aes(shape = QUD)) +
-  geom_line(aes(group=interaction(QUD, nonExh_situation))) +
-  labs(y = "average reaction time", x = "exhaustive situation") +
-  scale_color_brewer(name = "non-exhaustive situation", palette = "Set2")
-  # annotate("text", x=rep("withDistractor", 2), y=c(14000, 16000), 
-  #               label=c("C", "D"), hjust=2) +
-  # annotate("text", x=rep("w/oDistractor", 2), y=c(13500, 15500), 
-  #               label=c("A", "B"), hjust=-2)
-p 
-ggsave(file.path(plot_dir, "reaction-times-233.pdf"), p, width=7, height=4)
-
-```
 
 
