@@ -19,6 +19,7 @@ theme_set(theme_minimal(base_size=11) +
             theme(legend.position = "top", panel.spacing = unit(2, "lines")))
 target_dir = here("results")
 
+save_plots <- FALSE
 plot_dir = file.path(target_dir, "figs")
 if(!file.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 ```
@@ -361,7 +362,8 @@ p = data.critical.rate.by_stimulus_with_cis %>%
   facet_wrap(~stimulus) +
   labs(x="selection rate", y = "QUD")
 p
-ggsave(here(plot_dir, "selection-rates-barplot.pdf"), p, width=7, height=4)
+if(save_plots) ggsave(here(plot_dir, "selection-rates-barplot.pdf"), p, 
+                      width=7, height=4)
 
 w_dodge = 0.25
 p = data.critical.rate.by_stimulus_with_cis %>% 
@@ -376,7 +378,8 @@ p = data.critical.rate.by_stimulus_with_cis %>%
 p
 data.critical.rate.by_stimulus_with_cis %>% 
   filter(stimulus %in% c("B", "D"))
-ggsave(here(plot_dir, "selection-rates-pointplot.pdf"), p, width=5, height=4)
+if(save_plots) ggsave(here(plot_dir, "selection-rates-pointplot.pdf"), 
+                      p, width=5, height=4)
 
 
 point2 <- data.critical.rate.by_stimulus_with_cis %>% 
@@ -389,7 +392,23 @@ point2 <- data.critical.rate.by_stimulus_with_cis %>%
   facet_wrap(~stimulus, scales = "free") + 
   labs(y="selection rate", x = "QUD")
 point2
-ggsave(here(plot_dir, "selection-rates-pointplot2.pdf"), point2, width=6, height=4)
+if(save_plots) ggsave(here(plot_dir, "selection-rates-pointplot2.pdf"), point2, 
+                      width=6, height=4)
+
+
+point3 <- data.critical.rate.by_stimulus_with_cis %>% 
+  filter(stimulus %in% c("B", "D")) %>% 
+  ggplot(aes(y=ratio, x=QUD, color=stimulus, group=stimulus)) + 
+  geom_point(position = position_dodge(width=w_dodge)) +
+  geom_line(position = position_dodge(width = w_dodge)) +
+  geom_errorbar(aes(ymin=ci.low, ymax=ci.up), width=0.1, 
+                position = position_dodge(width=w_dodge)) +
+  facet_wrap(~response) #+ 
+  # labs(y="selection rate", x = "QUD")
+point3
+if(save_plots) ggsave(here(plot_dir, "selection-rates-pointplot3.pdf"), point3, 
+                      width=6, height=4)
+
 ```
 
 
@@ -429,6 +448,7 @@ p <- plot_responses_all_QUDs(data.critical)
 p
 ggsave(file.path(plot_dir, "empirical-responses.pdf"), p, width=7, height=4)
 ```
+
 
 ## Scores concerning the nb. of times participants give different responses depending on QUD
 
@@ -695,6 +715,63 @@ df.both = samples_posterior_probs %>%
 df.both
 ```
 
+
+### Posterior predictive checks
+
+```{r}
+yrep <- posterior_predict(ordinal_model, ndraws = 1000)
+
+plot_posterior_check_by_stimulus = function(dat, stimulus_letter){
+  df <- dat %>% rowid_to_column() %>% filter(stimulus == !!stimulus_letter)
+  
+  if(stimulus_letter %in% c("B", "D")) {
+    indices.if = df %>% filter(QUD == "if-p") %>% pull(rowid)
+    indices.willq = df %>% filter(QUD == "will-q")  %>% pull(rowid)
+  
+    pp_samples.if =  yrep[,indices.if] %>% as_tibble()
+    df.if <- pp_samples.if %>% rowid_to_column() %>% pivot_longer(cols=-rowid) %>% 
+      group_by(rowid, value) %>% summarize(n=n(), .groups = "drop_last") %>% 
+      mutate(p = n/sum(n)) %>% add_column(QUD = "if-p") %>% rename(response_cat = value)
+      
+    pp_samples.willq =  yrep[,indices.willq] %>% as_tibble()
+    df.willq <- pp_samples.willq %>% rowid_to_column() %>% pivot_longer(cols=-rowid) %>% 
+      group_by(rowid, value) %>% summarize(n=n(), .groups = "drop_last") %>% 
+      mutate(p = n/sum(n)) %>% add_column(QUD = "will-q")%>% rename(response_cat = value)
+    
+    df.samples <- bind_rows(df.if, df.willq)
+    
+  } else {
+    df.samples <- yrep[, df %>% pull(rowid)] %>% as_tibble() %>%
+      rowid_to_column() %>% pivot_longer(cols=-rowid) %>% 
+      group_by(rowid, value) %>% summarize(n=n(), .groups = "drop_last") %>% 
+      mutate(p = n/sum(n)) %>% add_column(QUD = "if-p") %>% rename(response_cat = value)
+  }
+  
+  pp_samples <- df.samples %>% 
+    mutate(response = case_when(response_cat == 1 ~ "NE", 
+                                response_cat == 2 ~ "both", 
+                                T ~ "E")) %>% 
+      mutate(response = factor(response, levels = c("NE", "both", "E")))
+  
+  df.obs <- dat %>% filter(stimulus == !! stimulus_letter) %>% 
+    group_by(QUD, response_int, response) %>% summarize(n=n(), .groups = "drop_last") %>% 
+    group_by(QUD) %>% mutate(p = n / sum(n)) 
+    
+  p <- pp_samples %>%
+    ggplot(aes(x=p, color = QUD)) + geom_density() +
+    facet_wrap(~response, scales = "free_y") + 
+    geom_point(data=df.obs, aes(x=p, y=0)) 
+  return(p)
+}
+plot_posterior_check_by_stimulus(df.ordinal, "A") + ggtitle("stimulus: A")
+plot_posterior_check_by_stimulus(df.ordinal, "C") + ggtitle("stimulus: C")
+
+plot_posterior_check_by_stimulus(df.ordinal, "B") + ggtitle("stimulus: B")
+plot_posterior_check_by_stimulus(df.ordinal, "D") + ggtitle("stimulus: D")
+```
+
+
+
 ### Exploratory analysis
 
 ```{r}
@@ -710,23 +787,18 @@ samples_posterior_probs %>% filter(QUD == "ifp") %>% mutate(h3 = both > E) %>%
 ```
 
 For stimulus A and C P(both | QUD=ifp) > P(E | QUD=ifp) is 1. 
- - What about P(both | QUD=willq) > P(E | QUD=willq)? (stimuli B+D)
+ 
+ - What about P(E | QUD=willq) > P(both | QUD=willq)? (stimuli B+D)
  - further, is  P(E | QUD=ifp) > P(NE | QUD=ifp)
 
 ```{r}
 samples_posterior_probs %>% filter(QUD == "willq") %>% 
-  mutate(h3_willq = both > E) %>% group_by(stimulus) %>% 
+  mutate(h3_willq = E > both) %>% group_by(stimulus) %>% 
   summarize(p_h3_willq = mean(h3_willq)) %>% 
   mutate(p_h3_willq.across = mean(p_h3_willq))
 
 samples_posterior_probs %>% filter(QUD == "ifp") %>% 
   mutate(h = E > NE) %>% group_by(stimulus) %>% 
-  summarize(p_h = mean(h)) %>% 
-  mutate(p_h.across = mean(p_h))
-
-# NE > E?
-samples_posterior_probs %>% filter(QUD == "ifp") %>% 
-  mutate(h = NE > E) %>% group_by(stimulus) %>% 
   summarize(p_h = mean(h)) %>% 
   mutate(p_h.across = mean(p_h))
 ```
@@ -758,14 +830,17 @@ df = samples_posterior_probs %>% filter(stimulus == "B" | stimulus == "D") %>%
   pivot_longer(cols=c(NE, both, E), names_to = "response", values_to = "p") %>% 
   group_by(QUD, stimulus) 
 
-# Exhaustive if-p
-df %>% filter(QUD == "ifp" & response == "E") %>% 
-  pivot_wider(names_from = "stimulus", values_from = "p") %>% 
-  mutate(h = B > D) %>% summarize(p_h = mean(h))
 # both if-p
 df %>% filter(QUD == "ifp" & response == "both") %>% 
   pivot_wider(names_from = "stimulus", values_from = "p") %>% 
   mutate(h = B < D) %>% summarize(p_h = mean(h))
+# exhaustive if-p
+df %>% filter(QUD == "ifp" & response == "E") %>% 
+  pivot_wider(names_from = "stimulus", values_from = "p") %>% 
+  mutate(h = B > D) %>% summarize(p_h = mean(h))
+# same with hypothesis-function: is B more exhaustive when QUDif-p than D?
+hypothesis(ordinal_model, "exhwoD > 0")
+
 
 # both will-q
 df %>% filter(QUD == "willq" & response == "both") %>% 
@@ -775,7 +850,24 @@ df %>% filter(QUD == "willq" & response == "both") %>%
 df %>% filter(QUD == "willq" & response == "E") %>% 
   pivot_wider(names_from = "stimulus", values_from = "p") %>% 
   mutate(h = B > D) %>% summarize(p_h = mean(h))
+# same with hypothesis function: is B more exhaustive when QUD:will-q than D?
+hypothesis(ordinal_model, "QUDwillMq + exhwoD + QUDwillMq:exhwoD > QUDwillMq")
+
 ```
+Difference between stimuli A and C?
+
+```{r}
+df = samples_posterior_probs %>% filter(stimulus == "A" | stimulus == "C") %>% 
+  dplyr::select(.draw, QUD, stimulus, E, both, NE) %>% 
+  pivot_longer(cols=c(NE, both, E), names_to = "response", values_to = "p") %>% 
+  group_by(QUD, stimulus) 
+
+# NE more often selected for stimulus C than for A?
+df %>% filter(QUD == "ifp" & response == "NE") %>% 
+  pivot_wider(names_from = "stimulus", values_from = "p") %>% 
+  mutate(h = C > A) %>% summarize(p_h = mean(h))
+```
+
 
 Model summary: only main effect b_nonExhint does not include 0 in 95% interval
 
