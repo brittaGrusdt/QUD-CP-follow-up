@@ -389,11 +389,15 @@ point2 <- data.critical.rate.by_stimulus_with_cis %>%
   geom_line(position = position_dodge(width = w_dodge)) +
   geom_errorbar(aes(ymin=ci.low, ymax=ci.up), width=0.1, 
                 position = position_dodge(width=w_dodge)) +
+  theme(axis.text = element_text(size = 26), 
+        axis.title = element_text(size = 26), 
+        legend.text = element_text(size = 26), 
+        legend.title = element_text(size = 26)) +
   facet_wrap(~stimulus, scales = "free") + 
   labs(y="selection rate", x = "QUD")
 point2
 if(save_plots) ggsave(here(plot_dir, "selection-rates-pointplot2.pdf"), point2, 
-                      width=6, height=4)
+                      width=16, height=8)
 
 
 point3 <- data.critical.rate.by_stimulus_with_cis %>% 
