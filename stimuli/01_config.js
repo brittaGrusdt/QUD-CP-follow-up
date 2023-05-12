@@ -1,12 +1,7 @@
 const DEBUG = true;
 const SHOW_PIC_LABELS = false;
-// var MODE = "color-vision"
-// var MODE = "train"
-var MODE = "test"
-// var MODE = "experiment"
-
-var ANIM_ANSWERS = "sliders"
-// var ANIM_ANSWERS = "buttons"
+var MODE = "train"
+//var MODE = "test"
 
 const SCENE = {w: 800, h: 500};
 PROPS = {'blocks': {'w':40, 'h': 80},
@@ -92,11 +87,9 @@ let TRAIN_IDS = {
          'if2_nnh',
          'if2_hnh',
          'if2_nnl',
+         // additional train trial that was not part of Exp. 1
+         //(scene that contradicts conditional `if ant-block, cons-block`)
          'if1_ind_hn'
-         // 'independent_edge_nn',
-         // 'if1_u-Ln',
-         // 'if1_u-Hh',
-         // 'if2_u-Lnu-H', 'if2_u-Hnu-H', 'if2_u-Hnu-L', 'if2_u-Lnu-L',
        ]
   }
 
@@ -110,6 +103,7 @@ let train_expectations = {
   'if2_nnl': ['none'],
   'if1_ind_hn': ['ANT'],
 
+  // other train trials that we did not use in the Experiment
   'independent_edge_nn': ['none'],
   'if1_u-Ln': ['none'],
   'if1_u-Hh': ['ANT', 'CONS'],

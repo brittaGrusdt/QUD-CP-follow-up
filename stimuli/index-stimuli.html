@@ -28,29 +28,31 @@
       let cond, stimulus, id;
       if(MODE === "test") {
         let types = TEST_TYPES;
-        types = ['if1_ind']
+        //types = ['if1_ind']
         // types = ['if2']
+        //types = ['independent_edge3']
         //types = ['independent_edge3']
         cond = types[_.random(0, types.length-1)];
         let priors = ['u', 'h', 'l', 'n', 'u-L', 'u-H']
         let p1 = _.sample(priors);
         let p2 = _.sample(priors);
-        let p3 = cond == 'if2' ? _.sample(priors) : '';
+        let p3 = (cond == 'if2' || cond == 'independent_edge3') ?
+          _.sample(priors) : '';
         // p1 = 'n'
         // p2 = 'h'
         // p3 = 'n'
         id =  cond + '_' + p1 + p2 + p3;
-        //console.log(TestStimuli[cond])
+        console.log(TestStimuli[cond])
         stimulus = TestStimuli[cond][id];
       } else if(MODE === "train") {
-        // let types = ["independent", "if1", "uncertain", "ramp", "if2ssw", "cp"]
-        // types = ["independent"]
+        let types = ["independent", "if1", "uncertain", "ramp", "if2ssw", "cp"]
+        //types = ["independent"]
         // types = ["uncertain"]
         // types = ["if1"]
         // types = ["if2ssw"]
         // types = ["ramp"]
         // types = ['cp']
-        types = ['if1_ind']
+        //types = ['if1_ind']
         cond = types[_.random(0, types.length-1)];
         id = _.sample(_.keys(TrainStimuli.map_category[cond]));
         // id = 'uncertain3';
